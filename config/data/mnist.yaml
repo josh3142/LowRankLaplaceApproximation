@@ -1,0 +1,9 @@
+name: mnist
+name_corrupt: mnist_corrupt
+path: "../../data"
+is_classification: True
+param:
+  H: 28
+  W: 28
+  C: 1
+  n_class: 10

@@ -1,0 +1,9 @@
+name: cifar10
+name_corrupt: cifar10_corrupt
+path: "../../data"
+is_classification: True
+param:
+  H: 32
+  W: 32
+  C: 3
+  n_class: 10

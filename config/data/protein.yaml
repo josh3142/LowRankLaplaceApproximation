@@ -1,0 +1,9 @@
+name: protein
+name_corrupt: protein
+path: null
+is_classification: False
+param:
+  H: 1
+  W: 1
+  C: 9
+  n_class: 1

@@ -1,0 +1,9 @@
+name: mnist_small
+name_corrupt: mnist_small
+path: "../../data"
+is_classification: True
+param:
+  H: 14
+  W: 14
+  C: 1
+  n_class: 2

@@ -1,0 +1,13 @@
+defaults:
+  - data: mnist_small2class
+  - pred_model: mlp_linear
+  - projector: Ice_lanczos
+  - _self_
+
+device: [0] # relevant devices are given by list (-1 is cpu) # this might not work on cluster
+device_torch: "cuda:0"
+seed: 2
+
+hydra:
+  job:
+    chdir: False  

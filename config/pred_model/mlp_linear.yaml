@@ -1,0 +1,6 @@
+# This is simple linear regression 
+name: mlp_linear
+param:
+  activation: null
+  n_layer: 0
+  n_hidden: 49

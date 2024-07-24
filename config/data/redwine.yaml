@@ -1,0 +1,11 @@
+name: redwine
+name_corrupt: redwine
+path: null
+is_classification: False
+model:
+  ckpt: "epoch49-step2500_dict.ckpt"
+param:
+  H: 1
+  W: 1
+  C: 11
+  n_class: 1

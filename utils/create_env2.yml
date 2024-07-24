@@ -1,0 +1,10 @@
+name: FisherSub2
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - mpi4py=3.1.6
+  - petsc=3.21.0
+  - petsc4py=3.21.0
+  - slepc=3.21.0
+  - slepc4py=3.21.0

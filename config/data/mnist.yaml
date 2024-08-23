@@ -2,6 +2,8 @@ name: mnist
 name_corrupt: mnist_corrupt
 path: "../../data"
 is_classification: True
+model:
+  ckpt: "epoch14-step3525_dict.ckpt"
 param:
   H: 28
   W: 28

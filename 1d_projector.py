@@ -1,4 +1,5 @@
-import os
+import os 
+os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
 
 import torch
 from torch.utils.data import DataLoader, Subset
@@ -23,6 +24,7 @@ from projector.projector1d import (get_jacobian, get_least_square_error,
     get_Vs, get_pred_var, get_inv)
 
 from utils_df import save_df
+from utils import make_deterministic
 
 
 def create_df(
@@ -57,6 +59,9 @@ def create_df(
 
 @hydra.main(config_path = "config", config_name = "config")
 def run_main(cfg: DictConfig) -> None:
+    make_deterministic(cfg.seed)
+    torch.set_num_threads(16)
+
     # https://pytorch.org/docs/stable/generated/torch.set_float32_matmul_precision.html
     # torch.set_float32_matmul_precision("high") 
     torch.set_default_dtype(torch.float64)
@@ -106,7 +111,7 @@ def run_main(cfg: DictConfig) -> None:
     model.to(cfg.device_torch)
 
     with torch.no_grad():
-        # try/except statements are to prevent memory overflow 
+        # try/except statements to prevent memory overflow 
         # chunk_size argument differs only
         # compute jacobian of test sample
         try:
@@ -158,7 +163,7 @@ def run_main(cfg: DictConfig) -> None:
         matvec=partial(
             get_lhs_linear_equ_of_1d_projector,
             Vs=v,
-            batch_size = cfg.projector.batch_size
+            batch_size=cfg.projector.batch_size
         )
     )
     # compute optimal projector

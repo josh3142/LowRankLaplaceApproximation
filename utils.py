@@ -12,6 +12,8 @@ from collections import OrderedDict
 from torch.utils.data import DataLoader, TensorDataset
 from torch.func import functional_call
 
+import random
+import numpy as np
 
 from typing import Generator, List, Dict, Callable
 
@@ -178,3 +180,9 @@ def get_max_class_softmax_model_fun(
     ), dim=-1))[torch.arange(len(X), device=Y.device), Y]
 
 
+def make_deterministic(seed) -> None:
+    random.seed(seed)   	    
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.use_deterministic_algorithms(True, warn_only=True)

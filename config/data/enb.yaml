@@ -11,3 +11,7 @@ param:
   W: 1
   C: 8
   n_class: 2
+swag_kwargs:
+  swag_n_snapshots: 100
+  swag_snapshot_freq: 1
+  swag_lr: 0.01

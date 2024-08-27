@@ -1,2 +1,3 @@
 name: cnn_small
 param: {}
+last_layer: classifier.1

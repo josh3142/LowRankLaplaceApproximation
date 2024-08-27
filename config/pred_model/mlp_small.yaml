@@ -3,3 +3,4 @@ param:
   activation: relu
   n_layer: 2
   n_hidden: 256 
+last_layer: logit

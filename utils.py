@@ -6,6 +6,9 @@
 # https://discuss.pytorch.org/t/does-model-parameters-return-the-parameters-in-topologically-sorted-order/81735/2
 # https://github.com/pytorch/pytorch/blob/17d743ff0452b9cf12c7fcab7314079b83012bd4/torch/nn/modules/module.py#L257
 
+from typing import Generator, List, Dict, Callable, Optional, Iterable,\
+    Literal, Union
+
 import torch
 from torch import Tensor, nn
 from collections import OrderedDict
@@ -13,9 +16,9 @@ from torch.utils.data import DataLoader, TensorDataset
 from torch.func import functional_call
 
 import random
+from tqdm import tqdm
 import numpy as np
 
-from typing import Generator, List, Dict, Callable
 
 
 def param_to_vec(params: Generator) -> Tensor:
@@ -186,3 +189,116 @@ def make_deterministic(seed) -> None:
     torch.manual_seed(seed)
     torch.backends.cudnn.deterministic = True
     torch.use_deterministic_algorithms(True, warn_only=True)
+
+
+
+def pred_cov_eigenvalues(pred_cov: torch.Tensor) -> torch.Tensor:
+    L = torch.linalg.svdvals(pred_cov)
+    return L
+
+
+def iterator_wise_quadratic_form(quadratic_form: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
+                              create_iterator: Callable[[], Iterable[torch.Tensor]],
+                              number_of_batches: Optional[int]=None) -> torch.Tensor:
+
+    """ Iterative computation of the matrix that arises from the
+    blocks`(quadrative_form(X_i,X_j))_ij` where the X_i,X_j are obtained by
+    running through the iterator obtained by the call `create_iterator()`.
+
+    Args: 
+        quadratic_form: Should return a torch.tensor matrix
+        create_iterator: When called with no arguments should return an iterator
+            yielding torch.tensor
+        number_of_batches (optional): When specified determines the number of
+            tensors taken from `create_iterator()`. When None, the iterator is
+            called up to `StopIteration`.
+
+    Returns:
+        A torch.tensor matrix
+    """
+    rows = []
+    for i, X_i in tqdm(enumerate(create_iterator())):
+        columns = []
+        if number_of_batches is not None:
+            if i >= number_of_batches:
+                break
+        for j, X_j in enumerate(create_iterator()):
+            if number_of_batches is not None:
+                if j >= number_of_batches:
+                    break
+            columns.append(quadratic_form(X_i, X_j))
+        rows.append(torch.concat(columns, dim=1))
+    return torch.concat(rows, dim=0)
+
+
+def iterator_wise_matmul(create_a_iterator: Callable[[], Iterable],
+                            b: torch.Tensor,
+                            number_of_batches: Optional[int]=None,
+                            transpose_a: bool = False,
+                            iteration_dim: Literal[0,1]=0) -> torch.Tensor:
+    """Computes `torch.matmul(a, b)` with the a yielded by `create_a_iterator()`
+    and concatenates the resulting tensors along the first dimension (if
+    `iteration_dim=0`) or adds them (if `iteration_dim=1`), i.e., `iteratin_dim`
+    denotes the dimension along which `create_a_iterator` samples a. 
+    *Note*: `a` is expected to be 2-dimensional, `b` can either be 1- or
+    *2-dimensional.
+    If `transpose_a` is set to True, `torch.matmul(a.T,b) is computed instead in
+    each iteration.
+
+    Args:
+        a_it (_type_): A function that returns an iterator with no argument.
+        b (torch.Tensor): 1- or 2-dimensional torch.Tensor
+        transpose_a (bool): Compute a.T @ b instead.
+
+    Returns:
+        torch.Tensor: The concatenation of `a @ b` (or `a.T @ b` if
+        `transpose_a` is True) along the first dimension for a drawn from
+        `create_a_iterator()`.
+    """
+    assert b.ndim in [1,2]
+    if iteration_dim==0:
+        a_times_b_collection = []
+        for i, a_i in enumerate(create_a_iterator()):
+            if number_of_batches is not None:
+                if i >= number_of_batches:
+                    break
+            assert a_i.ndim == 2
+            if not transpose_a:
+                a_times_b_collection.append(torch.matmul(a_i,b))
+            else:
+                a_times_b_collection.append(torch.matmul(a_i.T,b))
+        return torch.concat(a_times_b_collection, dim=0)
+    elif iteration_dim==1:
+        a_times_b = 0.0
+        batch_start_index = 0
+        for i, a_i in enumerate(create_a_iterator()):
+            if number_of_batches is not None:
+                if i >= number_of_batches:
+                    break
+            assert a_i.ndim == 2
+            if transpose_a:
+                a_i = a_i.T
+            batch_end_index = batch_start_index + a_i.size(-1)
+            a_times_b += torch.matmul(a_i,b[batch_start_index:batch_end_index])
+            batch_start_index = batch_end_index
+        return a_times_b
+        
+    else:
+        raise ValueError
+
+
+
+def flatten_batch_and_target_dimension(J_X: Union[torch.Tensor,
+                                                  Callable[[], Iterable]]
+                                                  ) -> Union[torch.Tensor,
+                                                             Callable[[],Iterable]]:
+    if type(J_X) is torch.Tensor:
+        assert J_X.dim() in [2,3], "can only be called for 2D or 3D Tensors."
+        return J_X.view(-1, J_X.size(-1))
+    else:
+        def create_flattened_iterator() -> Iterable:
+            for j in J_X():
+                assert type(j) is torch.Tensor # to avoid infinite recursion
+                yield flatten_batch_and_target_dimension(J_X=j)
+        return create_flattened_iterator
+

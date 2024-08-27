@@ -6,9 +6,11 @@ import cupy as cp
 import numpy as np
 
 from functools import partial
-from typing import Optional, Callable
+from typing import Iterable, Optional, Callable
 
-from utils import param_to_vec, get_softmax_model_fun, get_model_fun
+from torch.utils.data import DataLoader, Dataset
+
+from utils import flatten_batch_and_target_dimension, param_to_vec, get_softmax_model_fun, get_model_fun
 
 
 def get_gradient_projector_1d(p: Tensor, j: Tensor, V: Tensor) -> Tensor:
@@ -280,4 +282,23 @@ def get_pred_var(J: Tensor | np.ndarray, V: Tensor | np.ndarray
         t1 = np.einsum("cp, dp -> cd", J, J)
         t2 = np.einsum("cp, po, om, nm, dn -> cd", J, V, V_inv, V, J)
     return t1 - t2
+
+
+def create_jacobian_data_iterator(dataset: Dataset, batch_size: int,
+                                    number_of_batches: int,
+                                    model: nn.Module,
+                                    device: torch.device,
+                                    dtype=torch.dtype,
+                                    jacobian_order_seed: int=0,
+                                    ) -> Iterable:
+        assert jacobian_order_seed is not None, "seed is None, but need deterministic order"\
+            "for jacobian"
+        generator = torch.Generator().manual_seed(jacobian_order_seed)
+        dataloader = DataLoader(dataset=dataset, batch_size=batch_size, shuffle=True,
+                                generator=generator)
+        for i, (x,_) in enumerate(dataloader):
+            if i>=number_of_batches:
+                break
+            x = x.to(device).to(dtype)
+            yield flatten_batch_and_target_dimension(get_jacobian(model=model, X=x, is_classification=False).detach())
 

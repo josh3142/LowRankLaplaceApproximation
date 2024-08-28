@@ -1,0 +1,11 @@
+name: enb
+name_corrupt: enb
+path: null
+is_classification: False
+model:
+  ckpt: "epoch999-step1000_dict.ckpt"
+param:
+  H: 1
+  W: 1
+  C: 8
+  n_class: 2

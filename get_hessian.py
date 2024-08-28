@@ -31,7 +31,7 @@ def run_main(cfg: DictConfig) -> None:
     path_results_i = os.path.join(path_projector)
     Path(path_results_i).mkdir(parents=True, exist_ok=True)
     Path(path_projector).mkdir(parents=True, exist_ok=True)
-    print((cfg))
+    print(cfg)
 
     # initialize dataset and dataloader
     dataset = get_dataset(cfg.data.name, cfg.data.path, train=True) 
@@ -66,7 +66,14 @@ def run_main(cfg: DictConfig) -> None:
                            cfg.projector.batch_size * cfg.projector.n_batches)
         print("Shape of Hessian: ", H.shape)
         print("Samples to compute Hessian: ", n_sample )
-    
+        
+        # sanity check
+        print("\nDisplay few predictions as a sanity check.")
+        X, Y = next(iter(dl))
+        dtype = next(model.parameters()).dtype
+        print("Predictions: ", model(X.to(cfg.device_torch).to(dtype)))
+        print("True values: ", Y)
+
     # save Hessian
     torch.save(
         {"H": H,

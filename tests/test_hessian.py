@@ -77,6 +77,43 @@ class ToyModel(nn.Module):
             + y_hat_true_class**(-1) * self.get_ddy_hat_true_class(x, y)
        )
 
+    def get_hessian_gaussian_nll(self, x, y):
+        """
+        Computes 
+        ```
+            1 / 2 * \nabla_p^2 ((y_hat_0 - y_0)**2 + (y_hat_1 - y_1)**2) 
+            = nabla_p y_hat_0 + nabla_p y_hat_0 + (y_hat_0 - y_0) nabla_p**2 y_hat_0
+            + ... (same with index 0 replaced by index 1)
+        ```
+        """
+        zero = torch.zeros_like(x)
+        y_hat = self.get_y_hat(x)
+        dy_hat_fun = lambda x: torch.stack([
+            torch.cat([self.p[2] * x, self.p[2] * x**2, self.p[0] * x + self.p[1] * x**2, zero], axis=-1),
+            torch.cat([self.p[3] * x, self.p[3] * x**2, torch.zeros_like(x), self.p[0] * x + self.p[1] * x**2], axis=-1)
+        ], axis=-1)
+        ddy_hat_fun = lambda x: torch.stack([
+            torch.stack([
+                torch.cat([zero, zero, x, zero], axis=-1), 
+                torch.cat([zero, zero, x**2, zero], axis=-1), 
+                torch.cat([x, x**2, zero, zero], axis=-1),
+                torch.cat([zero, zero, zero, zero], axis=-1), 
+        ], axis=-1), 
+            torch.stack([
+                torch.cat([zero, zero, zero, x], axis=-1),
+                torch.cat([zero, zero, zero, x**2], axis=-1), 
+                torch.cat([zero, zero, zero, zero], axis=-1),
+                torch.cat([x, x**2, zero, zero], axis=-1),
+        ], axis=-1)
+        ], axis=-1)
+        outer_prod = lambda x: torch.einsum("bi, bj -> bij", x, x)
+
+        return (outer_prod(dy_hat_fun(x)[..., 0]) + 
+                (y_hat[:, 0] - y[:, 0])[:, None, None] * (ddy_hat_fun(x)[..., 0]) +
+                outer_prod(dy_hat_fun(x)[..., 1]) + 
+                (y_hat[:, 1] - y[:, 1])[:, None, None] * (ddy_hat_fun(x)[..., 1]))
+    
+
     def forward(self, x: Tensor) -> Tensor:
         return self.get_y_hat(x)
 
@@ -143,10 +180,27 @@ def test_gaussian_nll(init_data: Tuple):
     ddY_hat2 = torch.einsum("bi, bijl -> bijl", Y - Y_hat, ddY_hat)
     H_true = 1 / var * (dY_hat2 - ddY_hat2)
 
-    # compute hessian
+    # compute Hessian
     H = get_hessian_gaussian_nll(model, X, Y, var)
 
     assert torch.allclose(H_true, H, atol=1e-5)
+
+
+def test_gaussian_nll_explicit(init_data: Tuple):
+    X, _, Y = init_data
+    var = 1
+    model = ToyModel()
+
+    # compute true Hessian
+    H_true = model.get_hessian_gaussian_nll(X, Y)
+
+    # compute Hessian
+    H = get_hessian_gaussian_nll(model, X, Y, var)
+    H = H.sum(1)
+
+    assert H.shape==(X.shape[0], len(model.p), len(model.p))
+    assert torch.allclose(H_true, H, atol=1e-5)
+
 
 def test_H_sum_se(init_data: Tuple):
     X, Y, _ = init_data
@@ -190,3 +244,47 @@ def test_H_sum_gaussian_nll(init_data: Tuple):
 
     assert torch.allclose(H_true, H, atol=1e-5)
 
+
+def test_H_sum_gaussian_nll_linear(init_data: Tuple):
+    """ 
+    Test Hessian for Gaussian negative log-likelihood summed over `DataLoader`. 
+    The true Hessian is computed with `hessian` and `jacrev` from `torch`.
+    ```
+        H_true = 1 / var * X**2
+    ```
+    """   
+    # model anda data
+    N = 100
+    n_input, n_class = 10, 1
+    X = torch.randn((N, n_input))
+    Y = torch.randn((N,n_class))
+    dataset = TensorDataset(X,Y)
+    dl = DataLoader(dataset=dataset, batch_size=10)
+
+    model = torch.nn.Linear(10, n_class, bias=False)
+
+    # compute true Hessian H_true and Hessian to test H
+    H_true = torch.einsum("bi, bj -> bij", X, X).sum(0)
+    H = get_H_sum(model, dl, is_classification=False, n_batches=None)
+
+    assert torch.allclose(H_true, H, atol=1e-5)
+
+
+def test_H_sum_gaussian_nll_explicit(init_data: Tuple):
+    """ 
+    Test Hessian for Gaussian negative log-likelihood summed over `DataLoader`. 
+    The true Hessian is computed with `hessian` and `jacrev` from `torch`.
+    ```
+        H_true = 1 / var * X**2
+    ```
+    """   
+    X, _, Y = init_data
+    dl = DataLoader(TensorDataset(X, Y), batch_size=8, shuffle=False) 
+    # model
+    model = ToyModel()
+
+    # compute true Hessian H_true and Hessian to test H
+    H_true =  model.get_hessian_gaussian_nll(X, Y).sum(0)
+    H = get_H_sum(model, dl, is_classification=False, n_batches=None)
+
+    assert torch.allclose(H_true, H, atol=1e-6)

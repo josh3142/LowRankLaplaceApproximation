@@ -1,0 +1,11 @@
+name: navalpro
+is_classification: False
+# downloaded from https://www.kaggle.com/datasets/elikplim/maintenance-of-naval-propulsion-plants-data-set
+path: "../../../SharedData/AI/datasets/naval_propulsion/navalplantmaintenance.csv"
+model:
+  ckpt: "epoch99-step1000_dict.ckpt"
+param:
+  H: 1
+  W: 1
+  C: 14
+  n_class: 2

@@ -134,7 +134,8 @@ def get_H_sum(
         dl: DataLoader,
         is_classification: bool=False,
         n_batches: Optional[int]=None,
-        var: float=1.0
+        var: float=1.0,
+        **kwargs
     ) -> Tensor:
     """
     Computes the sum of Hessians of an entire `DataLoader`.

@@ -9,7 +9,7 @@ from typing import Tuple, Callable
 
 from projector.hessian import (get_hessian_nll, get_hessian_ce, 
     get_hessian_gaussian_nll, get_H_sum)
-from utils import param_to_vec, vec_to_dict
+from utils import vec_to_dict
 
 
 class ToyModel(nn.Module):
@@ -67,7 +67,7 @@ class ToyModel(nn.Module):
 
         return ddy_hat_true_class(x, y)
 
-    def get_hessian_nll(self, x, y):
+    def get_hessian_nll(self, x: Tensor, y: Tensor) -> Tensor:
         y_hat_true_class = self.get_y_hat_true_class(x, y).unsqueeze(-1)
         
         return - (
@@ -77,7 +77,7 @@ class ToyModel(nn.Module):
             + y_hat_true_class**(-1) * self.get_ddy_hat_true_class(x, y)
        )
 
-    def get_hessian_gaussian_nll(self, x, y):
+    def get_hessian_gaussian_nll(self, x: Tensor, y: Tensor) -> Tensor:
         """
         Computes 
         ```
@@ -202,7 +202,7 @@ def test_gaussian_nll_explicit(init_data: Tuple):
     assert torch.allclose(H_true, H, atol=1e-5)
 
 
-def test_H_sum_se(init_data: Tuple):
+def test_H_sum_ce(init_data: Tuple):
     X, Y, _ = init_data
     Y = Y.squeeze()
     dl = DataLoader(TensorDataset(X, Y), batch_size=8, shuffle=False)

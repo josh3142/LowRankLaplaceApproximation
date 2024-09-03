@@ -20,8 +20,8 @@ from typing import List
 from pred_model.model import get_model
 from data.dataset import get_dataset
 from projector.projector1d import (get_jacobian, get_least_square_error,
-    get_lhs_linear_equ_of_1d_projector, get_sigma_1d, get_sigma_projected_1d,
-    get_Vs, get_pred_var, get_inv)
+    get_lhs_linear_equ_of_1d_projector, get_sigma_1d, get_sigma_projected_1d)
+from projector.fisher import get_Vs
 
 from utils_df import save_df
 from utils import make_deterministic

@@ -1,6 +1,5 @@
 import torch
 from torch import Tensor, nn
-from torch.utils.data import DataLoader
 from torch.func import jacrev
 
 import cupy as cp
@@ -53,6 +52,7 @@ def get_sigma_1d(j: Tensor, V: Tensor) -> Tensor:
     VV_inv = torch.linalg.inv(torch.eye(V.shape[-1], device=V.device) + VV)
     fac = torch.einsum("i, ij, j", jV, VV_inv, jV)
     return jj - fac
+
 
 def get_jacobian(
         model: nn.Module, 
@@ -170,45 +170,6 @@ def get_lhs_linear_equ_of_1d_projector(
     w_out = w_out + w_cp
     return w_out
 
-def get_Vs(
-        model: nn.Module, 
-        dl: DataLoader, 
-        is_classification: bool=False,
-        n_batches: Optional[int]=None,
-        chunk_size: Optional[int]=None
-    ) -> Tensor:
-    """
-    Computes the score vectors iteratively and returns all of them on the cpu.
-    
-    Args:
-        model: Model to compute the score vectors V
-        dl: DataLoader whose data is used to compute V
-        n_batches: Number of iterations the DataLoader should use. If n_batch is
-            None the entire DataLoader is used.
-    """
-    device = next(model.parameters()).device
-    if n_batches is None:
-        n_batches = len(dl.dataset)
-
-    Vs = []
-    dl_iter = iter(dl)
-    for _ in range(n_batches):
-        try:
-            X = next(dl_iter)[0]
-            X = X.to(device)
-            X = X.to(torch.float64)
-        except:
-            break    
-        V = get_jacobian(
-                model, 
-                X, 
-                fun=torch.log,
-                is_classification=is_classification,
-                chunk_size=chunk_size
-            ).detach().cpu()
-        Vs.append(V.reshape(-1, V.shape[-1]).T)
-    Vs = torch.cat(Vs, dim=-1)
-    return Vs
 
 # def get_least_square_error(
 #         j: Tensor, 
@@ -298,12 +259,14 @@ def get_least_square_error(
     error = ((torch.sum(lhs - j)**2)**0.5).item()
     return error
 
+
 def get_inv(V: Tensor | np.ndarray) -> Tensor | np.ndarray:
     """ Compute (1 + V V^T)^-1 """
     try:
         return torch.linalg.inv(torch.eye(V.shape[1], device=V.device) + V.T @ V)
     except:
         return np.linalg.inv(np.eye(V.shape[1]) + V.T @ V)
+
 
 def get_pred_var(J: Tensor | np.ndarray, V: Tensor | np.ndarray
     ) -> Tensor | np.ndarray:

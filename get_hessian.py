@@ -3,7 +3,6 @@ os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
 
 import torch
 from torch.utils.data import DataLoader, Subset
-import numpy as np
 
 import hydra 
 from omegaconf import DictConfig 
@@ -11,7 +10,6 @@ from pathlib import Path
 
 from pred_model.model import get_model
 from data.dataset import get_dataset
-from projector.hessian import get_H_sum
 from projector.projector import get_hessian_type_fun
 
 from utils import make_deterministic

@@ -125,5 +125,8 @@ def get_I_sum(
     device = next(model.parameters()).device
 
     Vs = get_Vs(model, dl, is_classification, n_batches, chunk_size, var)
-    I = get_I_outer_product(Vs.to(device))
+    try:
+        I = get_I_outer_product(Vs.to(device))
+    except:
+        I = get_I_outer_product(Vs)
     return I

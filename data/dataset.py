@@ -151,7 +151,10 @@ class DatasetGenerator(Dataset):
             transform: Optional[Callable]=None, 
         ):
         self.X         = X
-        self.Y         = Y
+        if len(Y.shape) > 1:
+            self.Y         = Y
+        else:
+            self.Y = Y[...,None] # add target dimension
         self.transform = transform
 
     def __getitem__(self, idx: int) -> Tuple:

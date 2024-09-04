@@ -5,11 +5,28 @@ from cupy.linalg import qr
 
 from typing import Callable
 
+from projector.hessian import get_H_sum
+from projector.fisher import get_Vs, get_I_sum
+
 
 def get_projector_fun(name: str) -> Callable:
     """ Return a function that computes the projector. """
     if name=="projector1d":
         raise NotImplementedError()
+    else:
+        raise NotImplementedError(name)
+    
+    return projector_fun
+
+
+def get_hessian_type_fun(name: str) -> Callable:
+    """ Return a function that computes the (approximated) Hessian. """
+    if name=="H":
+        return get_H_sum
+    elif name=="Ihalf":
+        return get_Vs
+    elif name=="I":
+        return get_I_sum
     else:
         raise NotImplementedError(name)
     

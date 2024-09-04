@@ -1,0 +1,12 @@
+  name: Ihalf
+  dim: null
+  rounds: null # number of samples to compute the predictive covariance
+  # batches and chunk_size determine the storage cost to solve the LSE
+  batch_size: 128 # batch size to solve the LSE (linear system of equations)
+  n_batches: null # number of batches to solve the LSE. 
+  # batch_size x n_batches determine the number of samples to compute the Jacobian
+  # If None, the entire dataset is used to compute the Jacobian.
+  chunk_size: null # number of vjp to compute the Jacobian for solving the LSE
+  # If None, the maximum chunk size is used. 
+  # If 1, then compute the jacobian row-by-row with a for-loop
+  maxiter: null # maximal number iterations the solver performs

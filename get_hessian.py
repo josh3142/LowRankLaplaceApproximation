@@ -12,6 +12,7 @@ from pathlib import Path
 from pred_model.model import get_model
 from data.dataset import get_dataset
 from projector.hessian import get_H_sum
+from projector.projector import get_hessian_type_fun
 
 from utils import make_deterministic
 
@@ -52,19 +53,20 @@ def run_main(cfg: DictConfig) -> None:
     model.to(cfg.device_torch)
 
     with torch.no_grad():
-        # compute predictive covariance
-        H = get_H_sum(
+        # compute Hessian/FI
+        H = get_hessian_type_fun(cfg.projector.name)(
             model=model,
             dl=dl,
             is_classification=cfg.data.is_classification,
-            n_batches=cfg.projector.n_batches
+            n_batches=cfg.projector.n_batches,
+            chunk_size=cfg.projector.chunk_size
         )
         if cfg.projector.n_batches is None:
             n_sample = len(dataset)
         else:
             n_sample = min(len(dataset), 
                            cfg.projector.batch_size * cfg.projector.n_batches)
-        print("Shape of Hessian: ", H.shape)
+        print("Shape of (approximated) Hessian: ", H.shape)
         print("Samples to compute Hessian: ", n_sample )
         
         # sanity check
@@ -77,8 +79,9 @@ def run_main(cfg: DictConfig) -> None:
     # save Hessian
     torch.save(
         {"H": H,
-         "n_samples": n_sample}, 
-        os.path.join(path_results_i, f"H{n_sample}.pt")
+         "n_samples": n_sample, 
+         "hessian_type": cfg.projector.name},
+        os.path.join(path_results_i, f"{cfg.projector.name}{n_sample}.pt")
     )
 
 

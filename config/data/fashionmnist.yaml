@@ -1,0 +1,11 @@
+name: fashionmnist
+name_corrupt: fashionmnist
+path: "../../data"
+is_classification: True
+model:
+  ckpt: "epoch19-step4700_dict.ckpt"
+param:
+  H: 28
+  W: 28
+  C: 1
+  n_class: 10

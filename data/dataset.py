@@ -2,7 +2,7 @@ import os
 
 import torch
 from torch import nn, Tensor
-from torchvision.datasets import MNIST, CIFAR10
+from torchvision.datasets import MNIST, FashionMNIST, CIFAR10
 from torchvision.transforms import (Compose, Normalize, ToTensor, Resize,
     RandomHorizontalFlip, RandomGrayscale, RandomApply, RandomResizedCrop)
 from torchvision.transforms import ElasticTransform, GaussianBlur
@@ -300,6 +300,13 @@ def get_dataset(
         idcs = torch.logical_or(data.targets == 0, data.targets == 1)
         X, Y = data.data.numpy()[idcs, ...], data.targets[idcs] 
         data = DatasetGenerator(X, Y, transform=transform())
+
+    elif name.lower()=="fashionmnist":
+        def transform() -> Callable:
+            return Compose([ToTensor(), Normalize((0.5, ), (0.5,))])
+        
+        data = FashionMNIST(path, train=train, transform=transform(), 
+            download=True)
 
     elif name.lower()=="redwine":
         if train:

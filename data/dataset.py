@@ -1,3 +1,5 @@
+import os
+
 import torch
 from torch import nn, Tensor
 from torchvision.datasets import MNIST, CIFAR10
@@ -63,17 +65,215 @@ def get_dataset(
         data = MNIST(path, train=train, transform=transform(), 
             download=True)
 
-    elif name.lower()=="mnist_corrupt":
+    elif name.lower()=="mnist_c-brightness":
         def transform() -> Callable:
-            return Compose([ElasticTransform(alpha=150.),
-                            #GaussianBlur(kernel_size=(7, 7), sigma=(2., 5.)),
-                            ToTensor(), 
-                            Normalize((0.5, ), (0.5,))]
-                        )
-        
-        data = MNIST(path, train=train, transform=transform(), 
-            download=True)
+            return Compose([ToTensor(), Normalize((0.5, ), (0.5,))])
 
+        name, corruption = name.split("-")
+        file_path = os.path.join(path, name, corruption)
+        if train:
+            X = np.load(os.path.join(file_path, "train_images.npy"))
+            Y = np.load(os.path.join(file_path, "train_labels.npy"))
+        else:
+            X = np.load(os.path.join(file_path, "test_images.npy"))
+            Y = np.load(os.path.join(file_path, "test_labels.npy"))
+        data = DatasetGenerator(X, Y, transform=transform())
+
+    elif name.lower()=="mnist_c-canny_edges":
+        def transform() -> Callable:
+            return Compose([ToTensor(), Normalize((0.5, ), (0.5,))])
+
+        name, corruption = name.split("-")
+        file_path = os.path.join(path, name, corruption)
+        if train:
+            X = np.load(os.path.join(file_path, "train_images.npy"))
+            Y = np.load(os.path.join(file_path, "train_labels.npy"))
+        else:
+            X = np.load(os.path.join(file_path, "test_images.npy"))
+            Y = np.load(os.path.join(file_path, "test_labels.npy"))
+        data = DatasetGenerator(X, Y, transform=transform())
+
+    elif name.lower()=="mnist_c-dotted_line":
+        def transform() -> Callable:
+            return Compose([ToTensor(), Normalize((0.5, ), (0.5,))])
+
+        name, corruption = name.split("-")
+        file_path = os.path.join(path, name, corruption)
+        if train:
+            X = np.load(os.path.join(file_path, "train_images.npy"))
+            Y = np.load(os.path.join(file_path, "train_labels.npy"))
+        else:
+            X = np.load(os.path.join(file_path, "test_images.npy"))
+            Y = np.load(os.path.join(file_path, "test_labels.npy"))
+        data = DatasetGenerator(X, Y, transform=transform())
+
+    elif name.lower()=="mnist_c-fog":
+        def transform() -> Callable:
+            return Compose([ToTensor(), Normalize((0.5, ), (0.5,))])
+
+        name, corruption = name.split("-")
+        file_path = os.path.join(path, name, corruption)
+        if train:
+            X = np.load(os.path.join(file_path, "train_images.npy"))
+            Y = np.load(os.path.join(file_path, "train_labels.npy"))
+        else:
+            X = np.load(os.path.join(file_path, "test_images.npy"))
+            Y = np.load(os.path.join(file_path, "test_labels.npy"))
+        data = DatasetGenerator(X, Y, transform=transform())
+
+    elif name.lower()=="mnist_c-glass_blur":
+        def transform() -> Callable:
+            return Compose([ToTensor(), Normalize((0.5, ), (0.5,))])
+
+        name, corruption = name.split("-")
+        file_path = os.path.join(path, name, corruption)
+        if train:
+            X = np.load(os.path.join(file_path, "train_images.npy"))
+            Y = np.load(os.path.join(file_path, "train_labels.npy"))
+        else:
+            X = np.load(os.path.join(file_path, "test_images.npy"))
+            Y = np.load(os.path.join(file_path, "test_labels.npy"))
+        data = DatasetGenerator(X, Y, transform=transform())
+
+    elif name.lower()=="mnist_c-impulse_noise":
+        def transform() -> Callable:
+            return Compose([ToTensor(), Normalize((0.5, ), (0.5,))])
+
+        name, corruption = name.split("-")
+        file_path = os.path.join(path, name, corruption)
+        if train:
+            X = np.load(os.path.join(file_path, "train_images.npy"))
+            Y = np.load(os.path.join(file_path, "train_labels.npy"))
+        else:
+            X = np.load(os.path.join(file_path, "test_images.npy"))
+            Y = np.load(os.path.join(file_path, "test_labels.npy"))
+        data = DatasetGenerator(X, Y, transform=transform())        
+
+    elif name.lower()=="mnist_c-motion_blur":
+        def transform() -> Callable:
+            return Compose([ToTensor(), Normalize((0.5, ), (0.5,))])
+
+        name, corruption = name.split("-")
+        file_path = os.path.join(path, name, corruption)
+        if train:
+            X = np.load(os.path.join(file_path, "train_images.npy"))
+            Y = np.load(os.path.join(file_path, "train_labels.npy"))
+        else:
+            X = np.load(os.path.join(file_path, "test_images.npy"))
+            Y = np.load(os.path.join(file_path, "test_labels.npy"))
+        data = DatasetGenerator(X, Y, transform=transform())        
+
+    elif name.lower()=="mnist_c-rotate":
+        def transform() -> Callable:
+            return Compose([ToTensor(), Normalize((0.5, ), (0.5,))])
+
+        name, corruption = name.split("-")
+        file_path = os.path.join(path, name, corruption)
+        if train:
+            X = np.load(os.path.join(file_path, "train_images.npy"))
+            Y = np.load(os.path.join(file_path, "train_labels.npy"))
+        else:
+            X = np.load(os.path.join(file_path, "test_images.npy"))
+            Y = np.load(os.path.join(file_path, "test_labels.npy"))
+        data = DatasetGenerator(X, Y, transform=transform())        
+
+    elif name.lower()=="mnist_c-scale":
+        def transform() -> Callable:
+            return Compose([ToTensor(), Normalize((0.5, ), (0.5,))])
+
+        name, corruption = name.split("-")
+        file_path = os.path.join(path, name, corruption)
+        if train:
+            X = np.load(os.path.join(file_path, "train_images.npy"))
+            Y = np.load(os.path.join(file_path, "train_labels.npy"))
+        else:
+            X = np.load(os.path.join(file_path, "test_images.npy"))
+            Y = np.load(os.path.join(file_path, "test_labels.npy"))
+        data = DatasetGenerator(X, Y, transform=transform())        
+
+    elif name.lower()=="mnist_c-shear":
+        def transform() -> Callable:
+            return Compose([ToTensor(), Normalize((0.5, ), (0.5,))])
+
+        name, corruption = name.split("-")
+        file_path = os.path.join(path, name, corruption)
+        if train:
+            X = np.load(os.path.join(file_path, "train_images.npy"))
+            Y = np.load(os.path.join(file_path, "train_labels.npy"))
+        else:
+            X = np.load(os.path.join(file_path, "test_images.npy"))
+            Y = np.load(os.path.join(file_path, "test_labels.npy"))
+        data = DatasetGenerator(X, Y, transform=transform())        
+
+    elif name.lower()=="mnist_c-shot_noise":
+        def transform() -> Callable:
+            return Compose([ToTensor(), Normalize((0.5, ), (0.5,))])
+
+        name, corruption = name.split("-")
+        file_path = os.path.join(path, name, corruption)
+        if train:
+            X = np.load(os.path.join(file_path, "train_images.npy"))
+            Y = np.load(os.path.join(file_path, "train_labels.npy"))
+        else:
+            X = np.load(os.path.join(file_path, "test_images.npy"))
+            Y = np.load(os.path.join(file_path, "test_labels.npy"))
+        data = DatasetGenerator(X, Y, transform=transform())        
+
+    elif name.lower()=="mnist_c-spatter":
+        def transform() -> Callable:
+            return Compose([ToTensor(), Normalize((0.5, ), (0.5,))])
+
+        name, corruption = name.split("-")
+        file_path = os.path.join(path, name, corruption)
+        if train:
+            X = np.load(os.path.join(file_path, "train_images.npy"))
+            Y = np.load(os.path.join(file_path, "train_labels.npy"))
+        else:
+            X = np.load(os.path.join(file_path, "test_images.npy"))
+            Y = np.load(os.path.join(file_path, "test_labels.npy"))
+        data = DatasetGenerator(X, Y, transform=transform())        
+
+    elif name.lower()=="mnist_c-stripe":
+        def transform() -> Callable:
+            return Compose([ToTensor(), Normalize((0.5, ), (0.5,))])
+
+        name, corruption = name.split("-")
+        file_path = os.path.join(path, name, corruption)
+        if train:
+            X = np.load(os.path.join(file_path, "train_images.npy"))
+            Y = np.load(os.path.join(file_path, "train_labels.npy"))
+        else:
+            X = np.load(os.path.join(file_path, "test_images.npy"))
+            Y = np.load(os.path.join(file_path, "test_labels.npy"))
+        data = DatasetGenerator(X, Y, transform=transform())        
+
+    elif name.lower()=="mnist_c-translate":
+        def transform() -> Callable:
+            return Compose([ToTensor(), Normalize((0.5, ), (0.5,))])
+
+        name, corruption = name.split("-")
+        file_path = os.path.join(path, name, corruption)
+        if train:
+            X = np.load(os.path.join(file_path, "train_images.npy"))
+            Y = np.load(os.path.join(file_path, "train_labels.npy"))
+        else:
+            X = np.load(os.path.join(file_path, "test_images.npy"))
+            Y = np.load(os.path.join(file_path, "test_labels.npy"))
+        data = DatasetGenerator(X, Y, transform=transform())        
+
+    elif name.lower()=="mnist_c-zigzag":
+        def transform() -> Callable:
+            return Compose([ToTensor(), Normalize((0.5, ), (0.5,))])
+
+        name, corruption = name.split("-")
+        file_path = os.path.join(path, name, corruption)
+        if train:
+            X = np.load(os.path.join(file_path, "train_images.npy"))
+            Y = np.load(os.path.join(file_path, "train_labels.npy"))
+        else:
+            X = np.load(os.path.join(file_path, "test_images.npy"))
+            Y = np.load(os.path.join(file_path, "test_labels.npy"))
+        data = DatasetGenerator(X, Y, transform=transform())        
 
     elif name.lower()=="mnist_small":        
         def transform() -> Callable:

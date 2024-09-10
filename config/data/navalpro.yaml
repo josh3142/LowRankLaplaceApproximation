@@ -4,6 +4,8 @@ is_classification: False
 path: "../../../SharedData/AI/datasets/naval_propulsion/navalplantmaintenance.csv"
 model:
   ckpt: "epoch99-step1000_dict.ckpt"
+projector:
+   n_sample: 9547
 param:
   H: 1
   W: 1

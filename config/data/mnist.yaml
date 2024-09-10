@@ -9,6 +9,8 @@ path: "../../data"
 is_classification: True
 model:
   ckpt: "epoch14-step3525_dict.ckpt"
+projector:
+   n_sample: 60000
 param:
   H: 28
   W: 28

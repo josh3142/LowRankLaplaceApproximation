@@ -4,6 +4,8 @@ path: null
 is_classification: False
 model:
   ckpt: "epoch999-step1000_dict.ckpt"
+projector:
+   n_sample: 614
 param:
   H: 1
   W: 1

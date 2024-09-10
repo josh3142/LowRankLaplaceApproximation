@@ -45,7 +45,8 @@ def run_main(cfg: DictConfig) -> None:
         **(dict(cfg.pred_model.param) | dict(cfg.data.param)))
     state_dict = torch.load(
         os.path.join(path_model, cfg.data.model.ckpt),
-        map_location="cpu"
+        map_location="cpu",
+        weights_only=False
     )
     model.load_state_dict(state_dict)
     model.to(cfg.device_torch)

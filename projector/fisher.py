@@ -81,6 +81,7 @@ def get_Vs(
         For categorical distribution the Fisher Information is the outer product
         of the gradient of the sqrt of the softmax classifier multiplied by two.
     """
+    model.eval()
     device = next(model.parameters()).device
     if n_batches is None:
         n_batches = len(dl.dataset)

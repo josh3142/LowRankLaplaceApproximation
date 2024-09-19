@@ -146,6 +146,7 @@ def get_H_sum(
         n_batches: Number of iterations the DataLoader should use. If n_batch is
             None the entire DataLoader is used.
     """
+    model.eval()
     device = next(model.parameters()).device
     dtype = next(model.parameters()).dtype
     n_param = count_parameters(model)

@@ -74,6 +74,7 @@ def get_jacobian(
         chunk_size: If None (default), use the maximum chunk size (equivalent 
             to doing a single vmap over vjp to compute the jacobian)
     """
+    model.eval()
     param_vec = param_to_vec(model.parameters())
     if is_classification:
         J = jacrev(

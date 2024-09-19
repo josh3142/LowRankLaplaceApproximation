@@ -51,6 +51,7 @@ def run_main(cfg: DictConfig) -> None:
     model.load_state_dict(state_dict)
     model.to(cfg.device_torch)
 
+    model.eval()
     with torch.no_grad():
         # compute Hessian/FI
         H = get_hessian_type_fun(cfg.projector.name)(

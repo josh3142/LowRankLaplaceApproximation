@@ -1,0 +1,12 @@
+name: imagenet10
+path: "../../data"
+is_classification: True
+model:
+  ckpt: "epoch19-step4700_dict.ckpt"
+projector:
+   n_sample: 60000
+param:
+  H: 224
+  W: 224
+  C: 3
+  n_class: 10

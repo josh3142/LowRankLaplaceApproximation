@@ -5,30 +5,32 @@ from torch import nn, Tensor
 from torchvision.datasets import MNIST, FashionMNIST, CIFAR10
 from torchvision.transforms import (Compose, Normalize, ToTensor, Resize,
     RandomHorizontalFlip, RandomGrayscale, RandomApply, RandomResizedCrop)
-from torchvision.transforms import ElasticTransform, GaussianBlur
+from torchvision.transforms import ElasticTransform
 from torch.utils.data import Dataset
 import numpy as np
 
-from typing import Callable, Optional, Tuple, Union
+from typing import Callable, Optional, Tuple, Union, Literal
 
 from data.redwine import get_redwine, get_redwine_trafo
 from data.protein import get_protein, get_protein_trafo
 from data.california import get_california, get_california_trafo
 from data.enb import get_enb, get_enb_trafo
 from data.navalprop import get_navalpro, get_navalpro_trafo
+from data.imagenet import get_ImageNet
 
 
 def get_dataset(
         name: str, 
         path: str, 
         train: bool, 
+        dtype: torch.dtype="float64"
     ) -> Dataset:
     
     if name.lower()=="cifar10":
         def transform(train: bool) -> Callable:
             mu  = (0.4914, 0.4822, 0.4465)
             std = (0.2470, 0.2435, 0.2616)
-            trafo = [ToTensor(), Normalize(mu, std)]
+            trafo = [ToTensor(), Normalize(mu, std), SetType(dtype)]
             if train:
                 trafo += [
                     RandomHorizontalFlip(p = 0.5),
@@ -50,7 +52,9 @@ def get_dataset(
             trafo = [
                 ElasticTransform(alpha=50.),
                 ToTensor(), 
-                Normalize(mu, std)]
+                Normalize(mu, std),
+                SetType(dtype)
+            ]
             
             return Compose(trafo)
         
@@ -60,227 +64,67 @@ def get_dataset(
         
     elif name.lower()=="mnist":
         def transform() -> Callable:
-            return Compose([ToTensor(), Normalize((0.5, ), (0.5,))])
+            return Compose([
+                ToTensor(), 
+                Normalize((0.5, ), (0.5,)), 
+                SetType(dtype)]
+            )
         
         data = MNIST(path, train=train, transform=transform(), 
             download=True)
 
     elif name.lower()=="mnist_c-brightness":
-        def transform() -> Callable:
-            return Compose([ToTensor(), Normalize((0.5, ), (0.5,))])
-
-        name, corruption = name.split("-")
-        file_path = os.path.join(path, name, corruption)
-        if train:
-            X = np.load(os.path.join(file_path, "train_images.npy"))
-            Y = np.load(os.path.join(file_path, "train_labels.npy"))
-        else:
-            X = np.load(os.path.join(file_path, "test_images.npy"))
-            Y = np.load(os.path.join(file_path, "test_labels.npy"))
-        data = DatasetGenerator(X, Y, transform=transform())
+        data = get_mnist_corrupted(path, name, train, dtype)
 
     elif name.lower()=="mnist_c-canny_edges":
-        def transform() -> Callable:
-            return Compose([ToTensor(), Normalize((0.5, ), (0.5,))])
-
-        name, corruption = name.split("-")
-        file_path = os.path.join(path, name, corruption)
-        if train:
-            X = np.load(os.path.join(file_path, "train_images.npy"))
-            Y = np.load(os.path.join(file_path, "train_labels.npy"))
-        else:
-            X = np.load(os.path.join(file_path, "test_images.npy"))
-            Y = np.load(os.path.join(file_path, "test_labels.npy"))
-        data = DatasetGenerator(X, Y, transform=transform())
+        data = get_mnist_corrupted(path, name, train, dtype)
 
     elif name.lower()=="mnist_c-dotted_line":
-        def transform() -> Callable:
-            return Compose([ToTensor(), Normalize((0.5, ), (0.5,))])
-
-        name, corruption = name.split("-")
-        file_path = os.path.join(path, name, corruption)
-        if train:
-            X = np.load(os.path.join(file_path, "train_images.npy"))
-            Y = np.load(os.path.join(file_path, "train_labels.npy"))
-        else:
-            X = np.load(os.path.join(file_path, "test_images.npy"))
-            Y = np.load(os.path.join(file_path, "test_labels.npy"))
-        data = DatasetGenerator(X, Y, transform=transform())
+        data = get_mnist_corrupted(path, name, train, dtype)
 
     elif name.lower()=="mnist_c-fog":
-        def transform() -> Callable:
-            return Compose([ToTensor(), Normalize((0.5, ), (0.5,))])
-
-        name, corruption = name.split("-")
-        file_path = os.path.join(path, name, corruption)
-        if train:
-            X = np.load(os.path.join(file_path, "train_images.npy"))
-            Y = np.load(os.path.join(file_path, "train_labels.npy"))
-        else:
-            X = np.load(os.path.join(file_path, "test_images.npy"))
-            Y = np.load(os.path.join(file_path, "test_labels.npy"))
-        data = DatasetGenerator(X, Y, transform=transform())
+        data = get_mnist_corrupted(path, name, train, dtype)
 
     elif name.lower()=="mnist_c-glass_blur":
-        def transform() -> Callable:
-            return Compose([ToTensor(), Normalize((0.5, ), (0.5,))])
-
-        name, corruption = name.split("-")
-        file_path = os.path.join(path, name, corruption)
-        if train:
-            X = np.load(os.path.join(file_path, "train_images.npy"))
-            Y = np.load(os.path.join(file_path, "train_labels.npy"))
-        else:
-            X = np.load(os.path.join(file_path, "test_images.npy"))
-            Y = np.load(os.path.join(file_path, "test_labels.npy"))
-        data = DatasetGenerator(X, Y, transform=transform())
+        data = get_mnist_corrupted(path, name, train, dtype)
 
     elif name.lower()=="mnist_c-impulse_noise":
-        def transform() -> Callable:
-            return Compose([ToTensor(), Normalize((0.5, ), (0.5,))])
-
-        name, corruption = name.split("-")
-        file_path = os.path.join(path, name, corruption)
-        if train:
-            X = np.load(os.path.join(file_path, "train_images.npy"))
-            Y = np.load(os.path.join(file_path, "train_labels.npy"))
-        else:
-            X = np.load(os.path.join(file_path, "test_images.npy"))
-            Y = np.load(os.path.join(file_path, "test_labels.npy"))
-        data = DatasetGenerator(X, Y, transform=transform())        
+        data = get_mnist_corrupted(path, name, train, dtype)
 
     elif name.lower()=="mnist_c-motion_blur":
-        def transform() -> Callable:
-            return Compose([ToTensor(), Normalize((0.5, ), (0.5,))])
-
-        name, corruption = name.split("-")
-        file_path = os.path.join(path, name, corruption)
-        if train:
-            X = np.load(os.path.join(file_path, "train_images.npy"))
-            Y = np.load(os.path.join(file_path, "train_labels.npy"))
-        else:
-            X = np.load(os.path.join(file_path, "test_images.npy"))
-            Y = np.load(os.path.join(file_path, "test_labels.npy"))
-        data = DatasetGenerator(X, Y, transform=transform())        
+        data = get_mnist_corrupted(path, name, train, dtype)
 
     elif name.lower()=="mnist_c-rotate":
-        def transform() -> Callable:
-            return Compose([ToTensor(), Normalize((0.5, ), (0.5,))])
-
-        name, corruption = name.split("-")
-        file_path = os.path.join(path, name, corruption)
-        if train:
-            X = np.load(os.path.join(file_path, "train_images.npy"))
-            Y = np.load(os.path.join(file_path, "train_labels.npy"))
-        else:
-            X = np.load(os.path.join(file_path, "test_images.npy"))
-            Y = np.load(os.path.join(file_path, "test_labels.npy"))
-        data = DatasetGenerator(X, Y, transform=transform())        
+        data = get_mnist_corrupted(path, name, train, dtype)
 
     elif name.lower()=="mnist_c-scale":
-        def transform() -> Callable:
-            return Compose([ToTensor(), Normalize((0.5, ), (0.5,))])
-
-        name, corruption = name.split("-")
-        file_path = os.path.join(path, name, corruption)
-        if train:
-            X = np.load(os.path.join(file_path, "train_images.npy"))
-            Y = np.load(os.path.join(file_path, "train_labels.npy"))
-        else:
-            X = np.load(os.path.join(file_path, "test_images.npy"))
-            Y = np.load(os.path.join(file_path, "test_labels.npy"))
-        data = DatasetGenerator(X, Y, transform=transform())        
+        data = get_mnist_corrupted(path, name, train, dtype)
 
     elif name.lower()=="mnist_c-shear":
-        def transform() -> Callable:
-            return Compose([ToTensor(), Normalize((0.5, ), (0.5,))])
-
-        name, corruption = name.split("-")
-        file_path = os.path.join(path, name, corruption)
-        if train:
-            X = np.load(os.path.join(file_path, "train_images.npy"))
-            Y = np.load(os.path.join(file_path, "train_labels.npy"))
-        else:
-            X = np.load(os.path.join(file_path, "test_images.npy"))
-            Y = np.load(os.path.join(file_path, "test_labels.npy"))
-        data = DatasetGenerator(X, Y, transform=transform())        
+        data = get_mnist_corrupted(path, name, train, dtype)
 
     elif name.lower()=="mnist_c-shot_noise":
-        def transform() -> Callable:
-            return Compose([ToTensor(), Normalize((0.5, ), (0.5,))])
-
-        name, corruption = name.split("-")
-        file_path = os.path.join(path, name, corruption)
-        if train:
-            X = np.load(os.path.join(file_path, "train_images.npy"))
-            Y = np.load(os.path.join(file_path, "train_labels.npy"))
-        else:
-            X = np.load(os.path.join(file_path, "test_images.npy"))
-            Y = np.load(os.path.join(file_path, "test_labels.npy"))
-        data = DatasetGenerator(X, Y, transform=transform())        
+        data = get_mnist_corrupted(path, name, train, dtype)
 
     elif name.lower()=="mnist_c-spatter":
-        def transform() -> Callable:
-            return Compose([ToTensor(), Normalize((0.5, ), (0.5,))])
-
-        name, corruption = name.split("-")
-        file_path = os.path.join(path, name, corruption)
-        if train:
-            X = np.load(os.path.join(file_path, "train_images.npy"))
-            Y = np.load(os.path.join(file_path, "train_labels.npy"))
-        else:
-            X = np.load(os.path.join(file_path, "test_images.npy"))
-            Y = np.load(os.path.join(file_path, "test_labels.npy"))
-        data = DatasetGenerator(X, Y, transform=transform())        
+        data = get_mnist_corrupted(path, name, train, dtype)
 
     elif name.lower()=="mnist_c-stripe":
-        def transform() -> Callable:
-            return Compose([ToTensor(), Normalize((0.5, ), (0.5,))])
-
-        name, corruption = name.split("-")
-        file_path = os.path.join(path, name, corruption)
-        if train:
-            X = np.load(os.path.join(file_path, "train_images.npy"))
-            Y = np.load(os.path.join(file_path, "train_labels.npy"))
-        else:
-            X = np.load(os.path.join(file_path, "test_images.npy"))
-            Y = np.load(os.path.join(file_path, "test_labels.npy"))
-        data = DatasetGenerator(X, Y, transform=transform())        
+        data = get_mnist_corrupted(path, name, train, dtype)
 
     elif name.lower()=="mnist_c-translate":
-        def transform() -> Callable:
-            return Compose([ToTensor(), Normalize((0.5, ), (0.5,))])
-
-        name, corruption = name.split("-")
-        file_path = os.path.join(path, name, corruption)
-        if train:
-            X = np.load(os.path.join(file_path, "train_images.npy"))
-            Y = np.load(os.path.join(file_path, "train_labels.npy"))
-        else:
-            X = np.load(os.path.join(file_path, "test_images.npy"))
-            Y = np.load(os.path.join(file_path, "test_labels.npy"))
-        data = DatasetGenerator(X, Y, transform=transform())        
+        data = get_mnist_corrupted(path, name, train, dtype)
 
     elif name.lower()=="mnist_c-zigzag":
-        def transform() -> Callable:
-            return Compose([ToTensor(), Normalize((0.5, ), (0.5,))])
-
-        name, corruption = name.split("-")
-        file_path = os.path.join(path, name, corruption)
-        if train:
-            X = np.load(os.path.join(file_path, "train_images.npy"))
-            Y = np.load(os.path.join(file_path, "train_labels.npy"))
-        else:
-            X = np.load(os.path.join(file_path, "test_images.npy"))
-            Y = np.load(os.path.join(file_path, "test_labels.npy"))
-        data = DatasetGenerator(X, Y, transform=transform())        
+        data = get_mnist_corrupted(path, name, train, dtype)
 
     elif name.lower()=="mnist_small":        
         def transform() -> Callable:
             return Compose(
                 [ToTensor(), 
                  Resize(14, antialias=True), 
-                 Normalize((0.5, ), (0.5,))]
+                 Normalize((0.5, ), (0.5,)),
+                 SetType(dtype)]
             )
         
         data = MNIST(path, train=train, transform=transform(), 
@@ -291,7 +135,8 @@ def get_dataset(
             return Compose(
                 [ToTensor(), 
                  Resize(7, antialias=True), 
-                 Normalize((0.5, ), (0.5,))]
+                 Normalize((0.5, ), (0.5,)),
+                 SetType(dtype)]
             )
         
         # extract zeroth (0) and first (1) class
@@ -303,45 +148,64 @@ def get_dataset(
 
     elif name.lower()=="fashionmnist":
         def transform() -> Callable:
-            return Compose([ToTensor(), Normalize((0.5, ), (0.5,))])
+            return Compose([
+                ToTensor(), 
+                Normalize((0.5, ), (0.5,)), 
+                SetType(dtype)]
+            )
         
         data = FashionMNIST(path, train=train, transform=transform(), 
             download=True)
 
     elif name.lower()=="redwine":
+        def transform(train: bool, dtype: Literal["float32", "float64"]) -> Callable:
+            return Compose(get_redwine_trafo(train) + [SetType(dtype)])
+        
         if train:
             X, Y, _, _ = get_redwine()
         else:
             _, _, X, Y = get_redwine()
-        data = DatasetGenerator(X, Y, transform=get_redwine_trafo(train))
+        data = DatasetGenerator(X, Y, transform=transform(train, dtype))
 
     elif name.lower()=="protein":
+        def transform(train: bool, dtype: Literal["float32", "float64"]) -> Callable:
+                    return Compose(get_protein_trafo(train) + [SetType(dtype)])
+        
         if train:
             X, Y, _, _ = get_protein()
         else:
             _, _, X, Y = get_protein()
-        data = DatasetGenerator(X, Y, transform=get_protein_trafo(train))
+        data = DatasetGenerator(X, Y, transform=transform(train, dtype))
 
     elif name.lower()=="california":
+        def transform(train: bool, dtype: Literal["float32", "float64"]) -> Callable:
+            return Compose(get_california_trafo(train) + [SetType(dtype)])
+        
         if train:
             X, Y, _, _ = get_california()
         else:
             _, _, X, Y = get_california()
-        data = DatasetGenerator(X, Y, transform=get_california_trafo(train))
+        data = DatasetGenerator(X, Y, transform=transform(train, dtype))
 
     elif name.lower()=="enb":
+        def transform(train: bool, dtype: Literal["float32", "float64"]) -> Callable:
+            return Compose(get_enb_trafo(train) + [SetType(dtype)])
+        
         if train:
             X, Y, _, _ = get_enb()
         else:
             _, _, X, Y = get_enb()
-        data = DatasetGenerator(X, Y, transform=get_enb_trafo(train))
+        data = DatasetGenerator(X, Y, transform=transform(train, dtype))
 
     elif name.lower()=="navalpro":
+        def transform(train: bool, dtype: Literal["float32", "float64"]) -> Callable:
+            return Compose(get_navalpro_trafo(train) + [SetType(dtype)])
+
         if train:
             X, Y, _, _ = get_navalpro(path)
         else:
             _, _, X, Y = get_navalpro(path)
-        data = DatasetGenerator(X, Y, transform=get_navalpro_trafo(train))
+        data = DatasetGenerator(X, Y, transform=transform(train, dtype))
 
     else:
         raise NotImplementedError(f"Dataset {name} is not implemented.")
@@ -374,3 +238,35 @@ class DatasetGenerator(Dataset):
 
     def __len__(self) -> int:
         return len(self.Y)
+    
+
+class SetType:
+    def __init__(self, dtype: Literal["float32", "float64"]="float64"):
+        self.dtype = dtype
+
+    def __call__(self, tensor: Tensor):
+        if self.dtype=="float32":
+            return tensor.float()
+        elif self.dtype=="float64":
+            return tensor.double()
+        else:
+            raise NotImplementedError()
+
+
+def get_mnist_corrupted(path: str, name: str, train: bool, dtype: str) -> Dataset:
+    def transform() -> Callable:
+        return Compose([
+            ToTensor(), 
+            Normalize((0.5, ), (0.5,)), 
+            SetType(dtype)]
+        )    
+    
+    name, corruption = name.split("-")
+    file_path = os.path.join(path, name, corruption)
+    if train:
+        X = np.load(os.path.join(file_path, "train_images.npy"))
+        Y = np.load(os.path.join(file_path, "train_labels.npy"))
+    else:
+        X = np.load(os.path.join(file_path, "test_images.npy"))
+        Y = np.load(os.path.join(file_path, "test_labels.npy"))
+    return DatasetGenerator(X, Y, transform=transform()) 

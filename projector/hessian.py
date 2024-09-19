@@ -148,7 +148,6 @@ def get_H_sum(
     """
     model.eval()
     device = next(model.parameters()).device
-    dtype = next(model.parameters()).dtype
     n_param = count_parameters(model)
     if n_batches is None:
         n_batches = len(dl.dataset)
@@ -157,11 +156,7 @@ def get_H_sum(
     for _ in range(n_batches):
         try:
             X, Y = next(dl_iter)
-            X, Y = X.to(device).to(dtype), Y.to(device)
-            if torch.is_floating_point(Y):
-                Y = Y.to(dtype)
-                if len(Y.shape)==1:
-                    Y = Y[:, None]
+            X, Y = X.to(device), Y.to(device)
         except:
             break    
         H = get_hessian(

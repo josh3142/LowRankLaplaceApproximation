@@ -64,10 +64,14 @@ def plot_log_value_histogram(
 def run_main(cfg: DictConfig) -> None:
     # https://pytorch.org/docs/stable/generated/torch.set_float32_matmul_precision.html
     # torch.set_float32_matmul_precision("high") 
-    torch.set_default_dtype(torch.float64)
+    if cfg.dtype=="float64":
+        torch.set_default_dtype(torch.float64)
+    elif cfg.dtype=="float32":
+        torch.set_default_dtype(torch.float64)
+
     print(cfg)
 
-    path = f"results/{cfg.data.name}/{cfg.pred_model.name}"
+    path = f"results/{cfg.data.name}/{cfg.pred_model.name}/seed{cfg.seed}"
     path_projector = os.path.join(path, f"projector/{cfg.projector.name}")
   
     Hdict = torch.load(os.path.join(
@@ -82,7 +86,7 @@ def run_main(cfg: DictConfig) -> None:
 
     # Obtain the spectrum
     try:
-        #Load spectrum
+        # Load spectrum
         spectrum = torch.load(os.path.join(
             path_projector,
             f"{cfg.projector.name}{n_sample}Spectrum.pt"),

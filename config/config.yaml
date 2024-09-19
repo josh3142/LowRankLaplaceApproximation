@@ -7,6 +7,7 @@ defaults:
 device: [0] # relevant devices are given by list (-1 is cpu) # this might not work on cluster
 device_torch: "cuda:0"
 seed: 2
+dtype: "float64"
 
 hydra:
   job:

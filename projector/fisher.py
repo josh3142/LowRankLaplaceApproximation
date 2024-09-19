@@ -98,7 +98,6 @@ def get_Vs(
         try:
             X = next(dl_iter)[0]
             X = X.to(device)
-            X = X.to(torch.float64)
         except:
             break    
         V = get_jacobian(

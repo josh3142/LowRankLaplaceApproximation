@@ -33,7 +33,7 @@ def normalize(x: Tensor, mu: List, std: List) -> Tensor:
     return (x - mu) / std
 
 
-def get_california_trafo(train: bool=True) -> Callable:
+def get_california_trafo(train: bool=True) -> List:
     """
     Data transformation for protein data.
     These values are taken from the X1 with 
@@ -45,7 +45,7 @@ def get_california_trafo(train: bool=True) -> Callable:
         lambda x: torch.FloatTensor(x),
         partial(normalize, mu = mu, std = std)
     ]
-    return Compose(trafo)
+    return trafo
 
 if __name__ == "__main__":
     id   = 44025

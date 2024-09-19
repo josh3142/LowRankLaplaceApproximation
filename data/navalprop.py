@@ -1,9 +1,8 @@
 import numpy as np
 import pandas as pd
 import torch
-from torchvision.transforms import Compose
 from torch import Tensor
-from typing import Tuple, Callable, List
+from typing import Tuple, List
 
 from functools import partial
 
@@ -53,7 +52,7 @@ def normalize(x: Tensor, mu: List, std: List) -> Tensor:
     return (x - mu) / std
 
 
-def get_navalpro_trafo(train: bool=True) -> Callable:
+def get_navalpro_trafo(train: bool=True) -> List:
     """
     Data transformation for protein data.
     These values are taken from the X1 with 
@@ -67,7 +66,7 @@ def get_navalpro_trafo(train: bool=True) -> Callable:
         lambda x: torch.FloatTensor(x),
         partial(normalize, mu=mu, std=std)
     ]
-    return Compose(trafo)
+    return trafo
 
 
 if __name__=="__main__":

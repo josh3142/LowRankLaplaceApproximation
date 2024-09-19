@@ -22,18 +22,27 @@ def run_main(cfg: DictConfig) -> None:
 
     # https://pytorch.org/docs/stable/generated/torch.set_float32_matmul_precision.html
     # torch.set_float32_matmul_precision("high") 
-    torch.set_default_dtype(torch.float64)
+    if cfg.dtype=="float64":
+        torch.set_default_dtype(torch.float64)
+    elif cfg.dtype=="float32":
+        torch.set_default_dtype(torch.float64)
 
-    path = f"results/{cfg.data.name}/{cfg.pred_model.name}"
+    path = f"results/{cfg.data.name}/{cfg.pred_model.name}/seed{cfg.seed}"
     path_model = os.path.join(path, "ckpt")
     path_projector = os.path.join(path, f"projector/{cfg.projector.name}")
     path_results_i = os.path.join(path_projector)
+    Path(path_model).mkdir(parents=True, exist_ok=True)
     Path(path_results_i).mkdir(parents=True, exist_ok=True)
     Path(path_projector).mkdir(parents=True, exist_ok=True)
     print(cfg)
 
     # initialize dataset and dataloader
-    dataset = get_dataset(cfg.data.name, cfg.data.path, train=True) 
+    dataset = get_dataset(
+        cfg.data.name, 
+        cfg.data.path, 
+        train=True, 
+        dtype=cfg.dtype
+    ) 
     # dataset = Subset(dataset, indices=np.arange(100)) 
     dl = DataLoader(
         dataset, 

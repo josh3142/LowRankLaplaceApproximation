@@ -355,10 +355,11 @@ class DatasetGenerator(Dataset):
             self, 
             X: Union[Tensor, np.ndarray], 
             Y: Union[Tensor, np.ndarray], 
-            transform: Optional[Callable]=None, 
+            transform: Optional[Callable]=None,
+            is_classification: bool=False 
         ):
         self.X         = X
-        if len(Y.shape) > 1:
+        if len(Y.shape) > 1 or is_classification:
             self.Y         = Y
         else:
             self.Y = Y[...,None] # add target dimension

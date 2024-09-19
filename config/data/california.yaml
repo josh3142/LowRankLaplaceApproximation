@@ -3,7 +3,7 @@ name_corrupt: california
 path: null
 is_classification: False
 model:
-  ckpt: "64_1epoch19-step2580_dict.ckpt"
+  ckpt: "epoch99-step100_dict.ckpt"
 projector:
    n_sample: 16512
 param:

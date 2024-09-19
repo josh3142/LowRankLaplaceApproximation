@@ -3,7 +3,7 @@ name_corrupt: redwine
 path: null
 is_classification: False
 model:
-  ckpt: "epoch127-step1280_dict.ckpt"
+  ckpt: "epoch299-step300_dict.ckpt"
 projector:
    n_sample: 1279
 param:

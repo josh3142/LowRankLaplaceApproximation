@@ -8,7 +8,7 @@ name_corrupt: mnist_c-motion_blur
 path: "../../data"
 is_classification: True
 model:
-  ckpt: "epoch14-step3525_dict.ckpt"
+  ckpt: "epoch19-step4700_dict.ckpt"
 projector:
    n_sample: 60000
 param:

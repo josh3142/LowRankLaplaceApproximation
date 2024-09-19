@@ -2,6 +2,10 @@ name: cifar10
 name_corrupt: cifar10_corrupt
 path: "../../data"
 is_classification: True
+model:
+  ckpt: "epoch99-step19600_dict.ckpt"
+projector:
+   n_sample: 50000
 param:
   H: 32
   W: 32

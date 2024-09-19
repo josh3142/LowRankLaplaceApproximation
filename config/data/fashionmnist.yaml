@@ -3,7 +3,7 @@ name_corrupt: fashionmnist
 path: "../../data"
 is_classification: True
 model:
-  ckpt: "epoch19-step4700_dict.ckpt"
+  ckpt: "epoch39-step9400_dict.ckpt"
 projector:
    n_sample: 60000
 param:

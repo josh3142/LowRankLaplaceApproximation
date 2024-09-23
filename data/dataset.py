@@ -23,11 +23,11 @@ def get_dataset(
         name: str, 
         path: str, 
         train: bool, 
-        dtype: torch.dtype="float64"
+        dtype: Literal["float32", "float64"]="float64"
     ) -> Dataset:
     
     if name.lower()=="cifar10":
-        def transform(train: bool) -> Callable:
+        def transform() -> Callable:
             mu  = (0.4914, 0.4822, 0.4465)
             std = (0.2470, 0.2435, 0.2616)
             trafo = [ToTensor(), Normalize(mu, std), SetType(dtype)]
@@ -42,11 +42,11 @@ def get_dataset(
                 ]
             return Compose(trafo)
         
-        data = CIFAR10(path, train=train, transform=transform(train), 
+        data = CIFAR10(path, train=train, transform=transform(), 
             download=True)
         
     elif name.lower()=="cifar10_corrupt":
-        def transform(train: bool) -> Callable:
+        def transform() -> Callable:
             mu  = (0.4914, 0.4822, 0.4465)
             std = (0.2470, 0.2435, 0.2616)
             trafo = [
@@ -144,7 +144,7 @@ def get_dataset(
             download=True)
         idcs = torch.logical_or(data.targets == 0, data.targets == 1)
         X, Y = data.data.numpy()[idcs, ...], data.targets[idcs] 
-        data = DatasetGenerator(X, Y, transform=transform())
+        data = DatasetGenerator(X, Y, transform=transform(), dtype=dtype)
 
     elif name.lower()=="fashionmnist":
         def transform() -> Callable:
@@ -161,7 +161,7 @@ def get_dataset(
         # preprocessing according to 
         # https://pytorch.org/vision/main/models/generated/torchvision.models.resnet18.html
         # The loaded data is resized to 256**3 and cropped to 224**3
-        def transform(train: bool=True) -> Callable:
+        def transform() -> Callable:
             trafo = [ToTensor(),
                     Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))]
             if train:
@@ -174,57 +174,58 @@ def get_dataset(
             X, Y, _, _ =  get_ImageNet(path, n_class=10)
         else:
             _, _, X, Y =  get_ImageNet(path, n_class=10)
-        data = DatasetGenerator(X, Y, transform=transform(), is_classification=True)
+        data = DatasetGenerator(X, Y, transform=transform(), 
+                is_classification=True, dtype=dtype)
 
     elif name.lower()=="redwine":
-        def transform(train: bool, dtype: Literal["float32", "float64"]) -> Callable:
+        def transform() -> Callable:
             return Compose(get_redwine_trafo(train) + [SetType(dtype)])
         
         if train:
             X, Y, _, _ = get_redwine()
         else:
             _, _, X, Y = get_redwine()
-        data = DatasetGenerator(X, Y, transform=transform(train, dtype))
+        data = DatasetGenerator(X, Y, transform=transform(), dtype=dtype)
 
     elif name.lower()=="protein":
-        def transform(train: bool, dtype: Literal["float32", "float64"]) -> Callable:
+        def transform() -> Callable:
                     return Compose(get_protein_trafo(train) + [SetType(dtype)])
         
         if train:
             X, Y, _, _ = get_protein()
         else:
             _, _, X, Y = get_protein()
-        data = DatasetGenerator(X, Y, transform=transform(train, dtype))
+        data = DatasetGenerator(X, Y, transform=transform(), dtype=dtype)
 
     elif name.lower()=="california":
-        def transform(train: bool, dtype: Literal["float32", "float64"]) -> Callable:
+        def transform() -> Callable:
             return Compose(get_california_trafo(train) + [SetType(dtype)])
         
         if train:
             X, Y, _, _ = get_california()
         else:
             _, _, X, Y = get_california()
-        data = DatasetGenerator(X, Y, transform=transform(train, dtype))
+        data = DatasetGenerator(X, Y, transform=transform(), dtype=dtype)
 
     elif name.lower()=="enb":
-        def transform(train: bool, dtype: Literal["float32", "float64"]) -> Callable:
+        def transform() -> Callable:
             return Compose(get_enb_trafo(train) + [SetType(dtype)])
         
         if train:
             X, Y, _, _ = get_enb()
         else:
             _, _, X, Y = get_enb()
-        data = DatasetGenerator(X, Y, transform=transform(train, dtype))
+        data = DatasetGenerator(X, Y, transform=transform(), dtype=dtype)
 
     elif name.lower()=="navalpro":
-        def transform(train: bool, dtype: Literal["float32", "float64"]) -> Callable:
+        def transform() -> Callable:
             return Compose(get_navalpro_trafo(train) + [SetType(dtype)])
 
         if train:
             X, Y, _, _ = get_navalpro(path)
         else:
             _, _, X, Y = get_navalpro(path)
-        data = DatasetGenerator(X, Y, transform=transform(train, dtype))
+        data = DatasetGenerator(X, Y, transform=transform(), dtype=dtype)
 
     else:
         raise NotImplementedError(f"Dataset {name} is not implemented.")
@@ -239,14 +240,39 @@ class DatasetGenerator(Dataset):
             X: Union[Tensor, np.ndarray], 
             Y: Union[Tensor, np.ndarray], 
             transform: Optional[Callable]=None,
-            is_classification: bool=False 
+            is_classification: bool=False,
+            dtype: Literal["float32", "float64"]="float64"
         ):
-        self.X         = X
+        """
+        Args:
+            X: Independent variable
+            Y: Dependent variable
+            transform: Torch data transformation
+            is_classification: Is it a classification or regression task?
+            dtype: Data type of `X`. Data type of `Y` is changed only for 
+                regression tasks (classification task should be of integer type) 
+        """
+        self.X = self.change_dtype(X, dtype)
         if len(Y.shape) > 1 or is_classification:
             self.Y         = Y
         else:
             self.Y = Y[...,None] # add target dimension
+            self.Y = self.change_dtype(self.Y, dtype)
         self.transform = transform
+
+    def change_dtype(
+            self, 
+            data: Union[Tensor, np.ndarray], 
+            dtype: Literal["float32", "float64"]
+        ) -> Union[Tensor, np.ndarray]:
+        if isinstance(data, np.ndarray):
+            datatype = np.float64 if dtype=="float64" else np.float32
+            return data.astype(datatype)
+        elif isinstance(data, Tensor):
+            datatype = torch.float64 if dtype=="float64" else torch.float32
+            return data.to(datatype)
+        else:
+            raise TypeError("Input should be either NumPy array or Pytorch Tensor.")
 
     def __getitem__(self, idx: int) -> Tuple:
         x, y = self.X[idx], self.Y[idx]
@@ -288,4 +314,4 @@ def get_mnist_corrupted(path: str, name: str, train: bool, dtype: str) -> Datase
     else:
         X = np.load(os.path.join(file_path, "test_images.npy"))
         Y = np.load(os.path.join(file_path, "test_labels.npy"))
-    return DatasetGenerator(X, Y, transform=transform()) 
+    return DatasetGenerator(X, Y, transform=transform(), dtype=dtype) 

@@ -39,9 +39,18 @@ def update_performance_metrics(metrics_dict: dict, Sigma_approx: torch.Tensor,
     if Sigma is not None:
         if 'rel_error' not in metrics_dict.keys():
             metrics_dict['rel_error'] = []
-        metrics_dict['rel_error'].append(relative_error(Sigma_approx=Sigma_approx,
-                                            Sigma=Sigma))
+        rel_error_value = relative_error(Sigma_approx=Sigma_approx,
+                                            Sigma=Sigma)
+        metrics_dict['rel_error'].append(rel_error_value)
     # trace
     if 'trace' not in metrics_dict.keys():
         metrics_dict['trace'] = []
-    metrics_dict['trace'].append(trace(Sigma_approx=Sigma_approx))
+    trace_value = trace(Sigma_approx=Sigma_approx)
+    metrics_dict['trace'].append(trace_value)
+
+    # trace quotient
+    if Sigma is not None:
+        if 'trace_quotient' not in metrics_dict.keys():
+            metrics_dict['trace_quotient'] = []
+        trace_quotient_value = trace(Sigma_approx=Sigma_approx)/trace(Sigma)
+        metrics_dict['trace_quotient'].append(trace_quotient_value)

@@ -27,7 +27,6 @@ default_number_of_batches = 10
 default_s_step = 1
 default_prior_precision = 1.0
 
-
 @hydra.main(config_path = "config", config_name = "config")
 def run_main(cfg: DictConfig) -> None:
     # store all results in this dictionary
@@ -126,13 +125,15 @@ def run_main(cfg: DictConfig) -> None:
     train_data = get_dataset(**get_dataset_kwargs,
                     train=True)
     test_data = get_dataset(**get_dataset_kwargs,
-                    train=True)
+                    train=False)
     train_dataloader = DataLoader(dataset=train_data,
                                 batch_size=train_batch_size,
                                 shuffle=True) # used for fitting laplacian
     
     # load network
     model = get_model(**get_model_kwargs)
+    model.eval()
+    model.to(device)
 
     #  The following objects create upon call an iterator over the jacobian
     create_train_jac_it = lambda: create_jacobian_data_iterator(dataset=train_data,
@@ -148,6 +149,18 @@ def run_main(cfg: DictConfig) -> None:
                                                     device=device,
                                                     dtype=dtype)
 
+    # Compute s_max and s_List
+    if s_max is None:
+        number_of_parameters = sum([p.numel() for p in model.parameters()])
+        test_out = model(next(iter(train_dataloader))[0].to(device))
+        if len(test_out.shape) == 1:
+            n_out = 1
+        else:
+            n_out = test_out.size(-1)
+        n_data = min(len(train_data), train_number_of_batches * train_batch_size)
+        s_max = min(n_data * n_out, number_of_parameters)
+    s_list = np.arange(1,s_max,step=s_step)
+    results['s_list'] = s_list
 
     # Collect for each seed results and store them in `results[seed]`
     for seed in seed_list:
@@ -156,13 +169,12 @@ def run_main(cfg: DictConfig) -> None:
 
         # load checkpoint for seed
         ckpt_file_name = ckpt_file(seed=seed, ckpt_name=ckpt_name)
+        results[seed]['ckpt_file_name'] = ckpt_file_name
         print(f'Loading model from {ckpt_file_name}')
         with open(ckpt_file_name, 'rb') as f:
             state_dict = torch.load(f, map_location=device)
 
         model.load_state_dict(state_dict=state_dict)
-        model.eval()
-        model.to(device)
 
         # collecting posterior covariances for low rank methods
         print('>>>> Collecting posterior covariances')
@@ -208,25 +220,18 @@ def run_main(cfg: DictConfig) -> None:
         # Collect indices for subset methods
         print('>>>>> Collecting subset methods')
         results[seed]['subset'] = {}
-        for subset_method in subset_methods:
-            print(f'Considering subset {subset_method}')
-            if subset_method == 'swag':
+        for method in subset_methods:
+            print(f'Considering subset {method}')
+            if method == 'swag':
                 subset_kwargs = dict(cfg.data.swag_kwargs)
             else:
                 subset_kwargs = {}
-            results[seed]['subset'][subset_method] = {'Indices': submodel_indices(model=model,
+            results[seed]['subset'][method] = {'Indices': submodel_indices(model=model,
                                                                     likelihood=likelihood,
                                                                     train_loader=train_dataloader,
-                                                                    method=subset_method,
+                                                                    method=method,
                                                                     **subset_kwargs)}
 
-        # Compute s_max
-        if s_max is None:
-            number_of_parameters = sum([p.numel() for p in model.parameters()])
-            test_target = test_data[0][1]
-            target_dim = test_target.numel()
-            s_max = min(len(test_data) * target_dim, number_of_parameters)
-        s_list = np.arange(1,s_max,step=s_step)
 
         # collect baseline metrics
         results[seed]['baseline'] = {}
@@ -234,14 +239,14 @@ def run_main(cfg: DictConfig) -> None:
         results[seed]['baseline']['InvPsi'] = IPsi_ref
         if compute_reference_method:
             print('>>>>> Computing baseline results for reference method')
-            Sigma_ref = compute_Sigma(IPsi=IPsi_ref, J_X=create_train_jac_it)
+            Sigma_ref = compute_Sigma(IPsi=IPsi_ref, J_X=create_test_jac_it)
             U, Lamb, _ = torch.linalg.svd(Sigma_ref)
             P = compute_optimal_P(IPsi=IPsi_ref,
-                                J_X=create_train_jac_it,
+                                J_X=create_test_jac_it,
                                 U=U)
             results[seed]['baseline']['metrics'] = {}
             create_Sigma_P_s_it = compute_Sigma_P(P=P, IPsi=IPsi_ref,
-                                            J_X=create_train_jac_it,
+                                            J_X=create_test_jac_it,
                                             s_iterable=s_list)
             assert callable(create_Sigma_P_s_it)
             for Sigma_P_s in create_Sigma_P_s_it():
@@ -268,7 +273,7 @@ def run_main(cfg: DictConfig) -> None:
                                             J_X=create_test_jac_it,
                                             s_iterable=s_list)
             assert callable(create_Sigma_P_s_it) 
-            for Sigma_P_s in create_Sigma_P_s_it():
+            for s, Sigma_P_s in zip(s_list, create_Sigma_P_s_it()):
                 update_performance_metrics(
                     metrics_dict=results[seed]['low_rank'][method]['metrics'],
                     Sigma_approx=Sigma_P_s, Sigma=Sigma_ref)
@@ -277,7 +282,7 @@ def run_main(cfg: DictConfig) -> None:
         print('Considering subset methods\n............')
         for method in results[seed]['subset'].keys():
             print(f'> Computing results for {method}')
-            Ind = results[seed]['subset']['Indices']
+            Ind = results[seed]['subset'][method]['Indices']
             print('Obtaining P')
             P = Ind.P(s_max).to(device)
             print('Computing performance of P on test data')

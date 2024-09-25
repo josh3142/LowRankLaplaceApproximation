@@ -127,6 +127,24 @@ def test_HalfInvPsi(random_inv_psi):
     assert torch.all(torch.isclose(U @ torch.diag(Lamb) @ U.T,
                                    theoretical_value, atol=1e-5))
 
+
+
+    # test iterator version 
+    def create_V_iterator(batch_size: int=int(V.size(0)/10)+1):
+        number_of_batches = ceil(V.size(0)/batch_size)
+        for i in range(number_of_batches):
+            yield V[i*batch_size:(i+1)*batch_size]
+    it_IPsi = HalfInvPsi(V=create_V_iterator, prior_precision=prior_precision)
+    # test full V
+    assert torch.all(torch.isclose(it_IPsi.full_V, IPsi.full_V))
+    # test quadratic form
+    assert torch.all(torch.isclose(it_IPsi.quadratic_form(W=W),
+                                   IPsi.quadratic_form(W=W)))
+
+
+
+
+
 def test_KronInvPsi(init_data):
     model, train_loader, test_loader, X_test, device, likelihood, generator, \
         dtype, prior_precision  = init_data

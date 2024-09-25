@@ -3,7 +3,7 @@ from torch import Tensor, nn
 from torch.utils.data import DataLoader
 import numpy as np
 
-from typing import Optional
+from typing import Optional, Iterable
 
 from projector.projector1d import get_jacobian
 
@@ -130,3 +130,54 @@ def get_I_sum(
     except:
         I = get_I_outer_product(Vs)
     return I
+
+def get_V_iterator(
+        model: nn.Module, 
+        dl: DataLoader, 
+        is_classification: bool=False,
+        n_batches: Optional[int]=None,
+        chunk_size: Optional[int]=None,
+        var: float=1.0,
+        **kwargs
+    ) -> Iterable:
+    """
+    Creates an iterator that computes the gradients `V` to compute the Fisher
+    Information I =V^T @ V and yields them.
+    
+    Args:
+        model: Model to compute the score vectors V
+        dl: DataLoader whose data is used to compute V
+        n_batches: Number of iterations the DataLoader should use. If n_batch is
+            None the entire DataLoader is used.
+        var: Homoscedastic variance of the Gaussian distribution (only relevant
+            if `is_classification=False`)
+    """
+    model.eval()
+    device = next(model.parameters()).device
+    if n_batches is None:
+        n_batches = len(dl.dataset)
+
+    # define function to obtain the correct gradiends
+    if is_classification:
+        fun = lambda x: 2 * torch.sqrt(x)
+    else:
+        fun = lambda x: x
+
+    Vs = []
+    dl_iter = iter(dl)
+    for _ in range(n_batches):
+        try:
+            X = next(dl_iter)[0]
+            X = X.to(device)
+        except:
+            break    
+        V = get_jacobian(
+                model, 
+                X, 
+                fun=fun,
+                is_classification=is_classification,
+                chunk_size=chunk_size
+            ).detach()
+        # Since the Fisher Information is an outer product of V. Only the squareroot
+        # of the variance `var` is taken.
+        yield V/np.sqrt(var)

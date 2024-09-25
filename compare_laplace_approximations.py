@@ -14,6 +14,7 @@ import laplace
 from laplace import FullLaplace, KronLaplace
 
 from projector.projector1d import create_jacobian_data_iterator
+from projector.fisher import get_V_iterator
 from data.dataset import get_dataset
 from pred_model.model import get_model
 from linearized_model.low_rank_laplace import FullInvPsi, HalfInvPsi,\
@@ -44,7 +45,7 @@ def run_main(cfg: DictConfig) -> None:
     model_name = cfg.pred_model.name
     get_model_kwargs = dict(cfg.pred_model.param)
     ckpt_name = cfg.data.model.ckpt
-    if cfg.data.is_classification:
+    if is_classification := cfg.data.is_classification:
         likelihood = 'classification'
     else:
         likelihood = 'regression'
@@ -64,7 +65,13 @@ def run_main(cfg: DictConfig) -> None:
                                       default_number_of_batches)
     postfix = getattr(cfg, 'postfix', '')
     seed_list = getattr(cfg, 'seed_list', [None,])
-    reference_method = getattr(cfg, 'reference_methods', None)
+    reference_method = getattr(cfg, 'reference_method',None)
+    if reference_method == 'Ihalf_it':
+        assert (v_batchsize := getattr(cfg, 'v_batchsize',None)),\
+              "v_batchsize must be specified for reference method Ihalf_it"
+        v_n_batches = getattr(cfg, 'v_n_batches', None)
+        v_chunk_size = getattr(cfg, 'v_chunk_size', None)
+        
     compute_reference_method = getattr(cfg, 'compute_reference_method', True)
     s_max = getattr(cfg, 's_max', None)
     s_step = getattr(cfg, 's_step', default_s_step)
@@ -126,9 +133,10 @@ def run_main(cfg: DictConfig) -> None:
                     train=True)
     test_data = get_dataset(**get_dataset_kwargs,
                     train=False)
+    # used for fitting laplacian
     train_dataloader = DataLoader(dataset=train_data,
                                 batch_size=train_batch_size,
-                                shuffle=True) # used for fitting laplacian
+                                shuffle=True) 
     
     # load network
     model = get_model(**get_model_kwargs)
@@ -179,6 +187,24 @@ def run_main(cfg: DictConfig) -> None:
         # collecting posterior covariances for low rank methods
         print('>>>> Collecting posterior covariances')
         results[seed]['low_rank'] = {}
+        if reference_method == 'Ihalf_it':
+
+            train_dataloader = DataLoader(dataset=train_data,
+                                        batch_size=v_batchsize,
+                                        shuffle=True) 
+            create_V_it = lambda: get_V_iterator(model=model, dl=train_dataloader,
+                                                 is_classification=is_classification,
+                                                 n_batches=v_n_batches,
+                                                 chunk_size=v_chunk_size,
+                                                 )
+            # don't store InvPsi in results as it contains callables
+            # which cannot be pickled
+            results[seed]['low_rank'][reference_method] =  {
+                'InvPsi': None}
+            IPsi_ref = HalfInvPsi(V=create_V_it, prior_precision=prior_precision)
+        else:
+            assert reference_method in laplace_methods
+
         for method_name in laplace_methods:
             if method_name == 'file':
                 for hessian_name in stored_hessians:
@@ -233,10 +259,18 @@ def run_main(cfg: DictConfig) -> None:
                                                                     **subset_kwargs)}
 
 
-        # collect baseline metrics
+        # collect reference and baseline metrics
         results[seed]['baseline'] = {}
-        IPsi_ref = results[seed]['low_rank'][reference_method]['InvPsi']
-        results[seed]['baseline']['InvPsi'] = IPsi_ref
+        # do only store reference InvPsi if it isn't 
+        # build using a V iterator (cf. above)
+        if reference_method != 'Ihalf_it':
+            IPsi_ref = results[seed]['low_rank'][reference_method]['InvPsi']
+            results[seed]['baseline']['InvPsi']  = IPsi_ref
+        else:
+            results[seed]['baseline']['InvPsi']  = None
+
+        # obtain best optimal approximation using test data
+        # and the reference method
         if compute_reference_method:
             print('>>>>> Computing baseline results for reference method')
             Sigma_ref = compute_Sigma(IPsi=IPsi_ref, J_X=create_test_jac_it)
@@ -261,9 +295,16 @@ def run_main(cfg: DictConfig) -> None:
         # collect metrics for low_rank methods
         print('Considering low rank methods\n............')
         for method in results[seed]['low_rank'].keys():
+            if not compute_reference_method and method == reference_method:
+                continue
             print(f'> Computing results for {method}')
             results[seed]['low_rank'][method]['metrics'] = {}
-            IPsi = results[seed]['low_rank'][method]['InvPsi']
+            if method != 'Ihalf_it':
+                IPsi = results[seed]['low_rank'][method]['InvPsi']
+            elif reference_method == 'Ihalf_it':
+                IPsi = IPsi_ref
+            else:
+                raise NotImplementedError('Ihalf_it is only available as reference method')
             print('Performing SVD on predictive covariance on train data')
             U, Lamb = IPsi.Sigma_svd(create_train_jac_it)
             print('Computing P for train data')

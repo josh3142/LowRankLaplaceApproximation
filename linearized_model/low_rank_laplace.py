@@ -98,19 +98,23 @@ class FullInvPsi(InvPsi):
 
 class HalfInvPsi(FullInvPsi):
     """Defines inv_Psi via V^T@V + prior_precision * I """
-    def __init__(self, V: Union[torch.Tensor, Iterable], prior_precision: float) -> None:
+    def __init__(self, V: Union[torch.Tensor, Callable[[],Iterable]], prior_precision: float) -> None:
         if type(V) is torch.Tensor:
             self.V_from_iterator = False
             self.V = flatten_batch_and_target_dimension(V)
         else:
+            assert callable(V)
             self.V_from_iterator = True
             self.V = self.flattened_V_iterator(V)
         self.prior_precision = prior_precision
 
     @staticmethod
     def flattened_V_iterator(V_iterator):
-        for v in V_iterator:
-            yield flatten_batch_and_target_dimension(v)
+        def flat_it():
+            for v in V_iterator():
+                yield flatten_batch_and_target_dimension(v)
+        return flat_it
+        
 
     @property
     def full_V(self) -> torch.Tensor:
@@ -118,7 +122,7 @@ class HalfInvPsi(FullInvPsi):
             return self.V
         else:
             v_stack = []
-            for v in self.V:
+            for v in self.V():
                 v_stack.append(v)
             return torch.concat(v_stack, dim=0)
 
@@ -127,7 +131,7 @@ class HalfInvPsi(FullInvPsi):
     def inv_Psi_matrix(self):
         V = self.full_V
         H = V.T @ V
-        return H + self.prior_precision * torch.eye(H.size(0))
+        return H + self.prior_precision * torch.eye(H.size(0)).to(V.device)
 
      
 
@@ -137,18 +141,18 @@ class HalfInvPsi(FullInvPsi):
                 # flatten into 2D Tensor
                 W = W.view(-1, W.size(-1))
         if self.V_from_iterator:
-            v_times_W_collection = []
-            for v in self.V:
-                v_times_W_collection.append(v @ W)
-            V_times_W =  torch.concat(v_times_W_collection, dim=0)
+            sum_matrix_products = 0 
+            for v in self.V():
+                v_times_W = v @ W
+                sum_matrix_products += v_times_W.T @ v_times_W
+            assert type(sum_matrix_products) is torch.Tensor,\
+                  "no summation happened"
+            return sum_matrix_products + self.prior_precision * W.T @ W
         else:
             V_times_W = self.V @ W
-        return V_times_W.T @ V_times_W + self.prior_precision * W.T @ W
+            return V_times_W.T @ V_times_W + self.prior_precision * W.T @ W
 
 
-
-
-    
 
 
 class KronInvPsi(InvPsi):

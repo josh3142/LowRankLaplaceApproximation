@@ -10,7 +10,7 @@ import pytest
 from typing import Tuple
 
 from projector.fisher import (get_Vs, get_I_softmax_ln, get_I_outer_product,
-    get_I_sum)
+    get_I_sum, get_V_iterator)
 from projector.projector1d import get_jacobian
 from utils import param_to_vec, get_softmax_model_fun, get_model_fun
 
@@ -251,3 +251,16 @@ def test_I_sum_gaussian(init_data):
     I = get_I_sum(model, dl, is_classification=False, var=var)
 
     assert torch.allclose(I, I_true)
+
+
+@pytest.mark.parametrize("is_classification", [True, False])
+def test_get_V_iterator_gaussian(init_data: Tuple, is_classification: bool):
+    """ Test whether get_V_iterator yields the full V
+    """
+    model, X, Y, _ = init_data
+    dl = DataLoader(TensorDataset(X, Y), batch_size=8, shuffle=False)
+
+    Vs = get_Vs(model, dl, is_classification=is_classification)
+    V_it = get_V_iterator(model=model, dl=dl, is_classification=is_classification)
+    concat_V_it = torch.concat([v for v in V_it], dim=0)
+    assert torch.allclose(Vs, concat_V_it.cpu(), atol=1e-5)

@@ -257,7 +257,7 @@ class DatasetGenerator(Dataset):
             self.Y         = Y
         else:
             self.Y = Y[...,None] # add target dimension
-            self.Y = self.change_dtype(self.Y, dtype)
+        self.Y = self.change_dtype(self.Y, dtype)
         self.transform = transform
 
     def change_dtype(

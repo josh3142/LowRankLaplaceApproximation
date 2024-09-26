@@ -13,6 +13,7 @@ from torch.utils.data import DataLoader
 import numpy as np
 import laplace
 from laplace import FullLaplace, KronLaplace
+from tqdm import tqdm
 
 from projector.projector1d import create_jacobian_data_iterator
 from projector.fisher import get_V_iterator
@@ -153,14 +154,14 @@ def run_main(cfg: DictConfig) -> None:
     create_train_proj_jac_it = lambda: create_jacobian_data_iterator(dataset=train_data,
                                                     model=model,
                                                     batch_size=projector_batch_size,
-                                                    number_of_batches=projector_batch_size,
+                                                    number_of_batches=projector_number_of_batches,
                                                     device=device,
                                                     dtype=dtype,
                                                     chunk_size=chunk_size)
     create_test_proj_jac_it = lambda: create_jacobian_data_iterator(dataset=test_data,
                                                     model=model,
                                                     batch_size=projector_batch_size,
-                                                    number_of_batches=projector_batch_size,
+                                                    number_of_batches=projector_number_of_batches,
                                                     device=device,
                                                     dtype=dtype,
                                                     chunk_size=chunk_size)
@@ -322,7 +323,8 @@ def run_main(cfg: DictConfig) -> None:
                                             J_X=create_test_proj_jac_it,
                                             s_iterable=s_list)
             assert callable(create_Sigma_P_s_it) 
-            for s, Sigma_P_s in zip(s_list, create_Sigma_P_s_it()):
+            for s, Sigma_P_s in tqdm(zip(s_list, create_Sigma_P_s_it()),
+                                     desc='Running through s'):
                 update_performance_metrics(
                     metrics_dict=results[seed]['low_rank'][method]['metrics'],
                     Sigma_approx=Sigma_P_s, Sigma=Sigma_ref)

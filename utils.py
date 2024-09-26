@@ -217,7 +217,8 @@ def iterator_wise_quadratic_form(quadratic_form: Callable[[torch.Tensor, torch.T
         A torch.tensor matrix
     """
     rows = []
-    for i, X_i in tqdm(enumerate(create_iterator())):
+    for i, X_i in tqdm(enumerate(create_iterator()),
+                           desc='iterator_wise_quadratic_form'):
         columns = []
         if number_of_batches is not None:
             if i >= number_of_batches:
@@ -258,7 +259,8 @@ def iterator_wise_matmul(create_a_iterator: Callable[[], Iterable],
     assert b.ndim in [1,2]
     if iteration_dim==0:
         a_times_b_collection = []
-        for i, a_i in enumerate(create_a_iterator()):
+        for i, a_i in tqdm(enumerate(create_a_iterator()),
+                           desc='iterator_wise_matmul'):
             if number_of_batches is not None:
                 if i >= number_of_batches:
                     break
@@ -271,7 +273,8 @@ def iterator_wise_matmul(create_a_iterator: Callable[[], Iterable],
     elif iteration_dim==1:
         a_times_b = 0.0
         batch_start_index = 0
-        for i, a_i in enumerate(create_a_iterator()):
+        for i, a_i in tqdm(enumerate(create_a_iterator()),
+                           desc='iterator_wise_matmul'):
             if number_of_batches is not None:
                 if i >= number_of_batches:
                     break

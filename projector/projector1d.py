@@ -290,6 +290,7 @@ def create_jacobian_data_iterator(dataset: Dataset, batch_size: int,
                                     device: torch.device,
                                     dtype=torch.dtype,
                                     jacobian_order_seed: int=0,
+                                    chunk_size: Optional[int] = None,
                                     ) -> Iterable:
         assert jacobian_order_seed is not None, "seed is None, but need deterministic order"\
             "for jacobian"
@@ -300,5 +301,8 @@ def create_jacobian_data_iterator(dataset: Dataset, batch_size: int,
             if i>=number_of_batches:
                 break
             x = x.to(device).to(dtype)
-            yield flatten_batch_and_target_dimension(get_jacobian(model=model, X=x, is_classification=False).detach())
+            yield flatten_batch_and_target_dimension(get_jacobian(model=model,
+                                                                  X=x,
+                                                                  is_classification=False,
+                                                                  chunk_size=chunk_size).detach())
 

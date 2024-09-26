@@ -8,6 +8,7 @@ from typing import Optional, Union
 import hydra
 from omegaconf import DictConfig
 import torch
+import torch.nn as nn
 from torch.utils.data import DataLoader
 import numpy as np
 import laplace
@@ -27,6 +28,7 @@ default_batch_size = 100
 default_number_of_batches = 10
 default_s_step = 1
 default_prior_precision = 1.0
+layers_to_ignore = [nn.BatchNorm2d]
 
 @hydra.main(config_path = "config", config_name = "config")
 def run_main(cfg: DictConfig) -> None:
@@ -57,20 +59,20 @@ def run_main(cfg: DictConfig) -> None:
     if len(stored_hessians) > 0:
         laplace_methods += ['file']
     subset_methods = getattr(cfg, 'subset_methods', [])
-    train_batch_size = getattr(cfg, 'train_batch_size', default_batch_size)
-    test_batch_size = getattr(cfg, 'test_batch_size', default_batch_size)
+    standard_batch_size = getattr(cfg, 'standard_batch_size', default_batch_size)
+    train_batch_size = getattr(cfg, 'train_batch_size', standard_batch_size)
+    test_batch_size = getattr(cfg, 'test_batch_size', standard_batch_size)
+    v_batchsize = getattr(cfg, 'v_batchsize',standard_batch_size)
     train_number_of_batches = getattr(cfg, 'train_number_of_batches',
                                       default_number_of_batches)
     test_number_of_batches = getattr(cfg, 'test_number_of_batches',
                                       default_number_of_batches)
+    v_n_batches = getattr(cfg, 'v_n_batches', None)
+    chunk_size = getattr(cfg, 'chunk_size', None)
     postfix = getattr(cfg, 'postfix', '')
     seed_list = getattr(cfg, 'seed_list', [None,])
+    results['seed_list'] = seed_list
     reference_method = getattr(cfg, 'reference_method',None)
-    if reference_method == 'Ihalf_it':
-        assert (v_batchsize := getattr(cfg, 'v_batchsize',None)),\
-              "v_batchsize must be specified for reference method Ihalf_it"
-        v_n_batches = getattr(cfg, 'v_n_batches', None)
-        v_chunk_size = getattr(cfg, 'v_chunk_size', None)
         
     compute_reference_method = getattr(cfg, 'compute_reference_method', True)
     s_max = getattr(cfg, 's_max', None)
@@ -142,6 +144,12 @@ def run_main(cfg: DictConfig) -> None:
     model = get_model(**get_model_kwargs)
     model.eval()
     model.to(device)
+    # switch off layers to ignore
+    for module in model.modules():
+        if type(module) in layers_to_ignore:
+            for par in module.parameters():
+                par.requires_grad = False
+
 
     #  The following objects create upon call an iterator over the jacobian
     create_train_jac_it = lambda: create_jacobian_data_iterator(dataset=train_data,
@@ -149,13 +157,15 @@ def run_main(cfg: DictConfig) -> None:
                                                     batch_size=train_batch_size,
                                                     number_of_batches=train_number_of_batches,
                                                     device=device,
-                                                    dtype=dtype)
+                                                    dtype=dtype,
+                                                    chunk_size=chunk_size)
     create_test_jac_it = lambda: create_jacobian_data_iterator(dataset=test_data,
                                                     model=model,
                                                     batch_size=test_batch_size,
                                                     number_of_batches=test_number_of_batches,
                                                     device=device,
-                                                    dtype=dtype)
+                                                    dtype=dtype,
+                                                    chunk_size=chunk_size)
 
     # Compute s_max and s_List
     if s_max is None:
@@ -195,8 +205,7 @@ def run_main(cfg: DictConfig) -> None:
             create_V_it = lambda: get_V_iterator(model=model, dl=train_dataloader,
                                                  is_classification=is_classification,
                                                  n_batches=v_n_batches,
-                                                 chunk_size=v_chunk_size,
-                                                 )
+                                                 chunk_size=chunk_size)
             # don't store InvPsi in results as it contains callables
             # which cannot be pickled
             results[seed]['low_rank'][reference_method] =  {
@@ -233,7 +242,8 @@ def run_main(cfg: DictConfig) -> None:
                                         subset_of_weights='all', prior_precision=prior_precision)
                     la.fit(train_dataloader)
                     assert type(la) is FullLaplace
-                    results[seed]['low_rank'][method_name] = FullInvPsi(inv_Psi=la.posterior_precision.to(dtype))
+                    results[seed]['low_rank'][method_name] = {
+                        'InvPsi': FullInvPsi(inv_Psi=la.posterior_precision.to(dtype))}
                 elif method_name in ['kron']:
                     la = laplace.Laplace(model=model, hessian_structure='kron', likelihood=likelihood,
                                         subset_of_weights='all', prior_precision=prior_precision)

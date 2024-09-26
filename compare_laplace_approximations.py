@@ -60,12 +60,10 @@ def run_main(cfg: DictConfig) -> None:
         laplace_methods += ['file']
     subset_methods = getattr(cfg, 'subset_methods', [])
     standard_batch_size = getattr(cfg, 'standard_batch_size', default_batch_size)
-    train_batch_size = getattr(cfg, 'train_batch_size', standard_batch_size)
-    test_batch_size = getattr(cfg, 'test_batch_size', standard_batch_size)
-    v_batchsize = getattr(cfg, 'v_batchsize',standard_batch_size)
-    train_number_of_batches = getattr(cfg, 'train_number_of_batches',
-                                      default_number_of_batches)
-    test_number_of_batches = getattr(cfg, 'test_number_of_batches',
+    fit_batch_size = getattr(cfg, 'fit_batch_size', standard_batch_size)
+    projector_batch_size = getattr(cfg, 'projector_batch_size', standard_batch_size)
+    v_batch_size = getattr(cfg, 'v_batch_size',standard_batch_size)
+    projector_number_of_batches = getattr(cfg, 'projector_number_of_batches',
                                       default_number_of_batches)
     v_n_batches = getattr(cfg, 'v_n_batches', None)
     chunk_size = getattr(cfg, 'chunk_size', None)
@@ -136,8 +134,8 @@ def run_main(cfg: DictConfig) -> None:
     test_data = get_dataset(**get_dataset_kwargs,
                     train=False)
     # used for fitting laplacian
-    train_dataloader = DataLoader(dataset=train_data,
-                                batch_size=train_batch_size,
+    fit_dataloader = DataLoader(dataset=train_data,
+                                batch_size=fit_batch_size,
                                 shuffle=True) 
     
     # load network
@@ -152,17 +150,17 @@ def run_main(cfg: DictConfig) -> None:
 
 
     #  The following objects create upon call an iterator over the jacobian
-    create_train_jac_it = lambda: create_jacobian_data_iterator(dataset=train_data,
+    create_train_proj_jac_it = lambda: create_jacobian_data_iterator(dataset=train_data,
                                                     model=model,
-                                                    batch_size=train_batch_size,
-                                                    number_of_batches=train_number_of_batches,
+                                                    batch_size=projector_batch_size,
+                                                    number_of_batches=projector_batch_size,
                                                     device=device,
                                                     dtype=dtype,
                                                     chunk_size=chunk_size)
-    create_test_jac_it = lambda: create_jacobian_data_iterator(dataset=test_data,
+    create_test_proj_jac_it = lambda: create_jacobian_data_iterator(dataset=test_data,
                                                     model=model,
-                                                    batch_size=test_batch_size,
-                                                    number_of_batches=test_number_of_batches,
+                                                    batch_size=projector_batch_size,
+                                                    number_of_batches=projector_batch_size,
                                                     device=device,
                                                     dtype=dtype,
                                                     chunk_size=chunk_size)
@@ -170,12 +168,12 @@ def run_main(cfg: DictConfig) -> None:
     # Compute s_max and s_List
     if s_max is None:
         number_of_parameters = sum([p.numel() for p in model.parameters()])
-        test_out = model(next(iter(train_dataloader))[0].to(device))
+        test_out = model(next(iter(fit_dataloader))[0].to(device))
         if len(test_out.shape) == 1:
             n_out = 1
         else:
             n_out = test_out.size(-1)
-        n_data = min(len(train_data), train_number_of_batches * train_batch_size)
+        n_data = min(len(train_data), projector_number_of_batches * projector_batch_size)
         s_max = min(n_data * n_out, number_of_parameters)
     s_list = np.arange(1,s_max,step=s_step)
     results['s_list'] = s_list
@@ -199,10 +197,10 @@ def run_main(cfg: DictConfig) -> None:
         results[seed]['low_rank'] = {}
         if reference_method == 'Ihalf_it':
 
-            train_dataloader = DataLoader(dataset=train_data,
-                                        batch_size=v_batchsize,
+            V_it_dataloader = DataLoader(dataset=train_data,
+                                        batch_size=v_batch_size,
                                         shuffle=True) 
-            create_V_it = lambda: get_V_iterator(model=model, dl=train_dataloader,
+            create_V_it = lambda: get_V_iterator(model=model, dl=V_it_dataloader,
                                                  is_classification=is_classification,
                                                  n_batches=v_n_batches,
                                                  chunk_size=chunk_size)
@@ -240,14 +238,14 @@ def run_main(cfg: DictConfig) -> None:
                 if method_name in ['ggn']:
                     la = laplace.Laplace(model=model, hessian_structure='full', likelihood=likelihood,
                                         subset_of_weights='all', prior_precision=prior_precision)
-                    la.fit(train_dataloader)
+                    la.fit(fit_dataloader)
                     assert type(la) is FullLaplace
                     results[seed]['low_rank'][method_name] = {
                         'InvPsi': FullInvPsi(inv_Psi=la.posterior_precision.to(dtype))}
                 elif method_name in ['kron']:
                     la = laplace.Laplace(model=model, hessian_structure='kron', likelihood=likelihood,
                                         subset_of_weights='all', prior_precision=prior_precision)
-                    la.fit(train_dataloader)
+                    la.fit(fit_dataloader)
                     assert type(la) is KronLaplace
                     results[seed]['low_rank'][method_name] = {'InvPsi': KronInvPsi(inv_Psi=la)}
                 else:
@@ -264,7 +262,7 @@ def run_main(cfg: DictConfig) -> None:
                 subset_kwargs = {}
             results[seed]['subset'][method] = {'Indices': submodel_indices(model=model,
                                                                     likelihood=likelihood,
-                                                                    train_loader=train_dataloader,
+                                                                    train_loader=fit_dataloader,
                                                                     method=method,
                                                                     **subset_kwargs)}
 
@@ -283,14 +281,14 @@ def run_main(cfg: DictConfig) -> None:
         # and the reference method
         if compute_reference_method:
             print('>>>>> Computing baseline results for reference method')
-            Sigma_ref = compute_Sigma(IPsi=IPsi_ref, J_X=create_test_jac_it)
+            Sigma_ref = compute_Sigma(IPsi=IPsi_ref, J_X=create_test_proj_jac_it)
             U, Lamb, _ = torch.linalg.svd(Sigma_ref)
             P = compute_optimal_P(IPsi=IPsi_ref,
-                                J_X=create_test_jac_it,
+                                J_X=create_test_proj_jac_it,
                                 U=U)
             results[seed]['baseline']['metrics'] = {}
             create_Sigma_P_s_it = compute_Sigma_P(P=P, IPsi=IPsi_ref,
-                                            J_X=create_test_jac_it,
+                                            J_X=create_test_proj_jac_it,
                                             s_iterable=s_list)
             assert callable(create_Sigma_P_s_it)
             for Sigma_P_s in create_Sigma_P_s_it():
@@ -316,12 +314,12 @@ def run_main(cfg: DictConfig) -> None:
             else:
                 raise NotImplementedError('Ihalf_it is only available as reference method')
             print('Performing SVD on predictive covariance on train data')
-            U, Lamb = IPsi.Sigma_svd(create_train_jac_it)
+            U, Lamb = IPsi.Sigma_svd(create_train_proj_jac_it)
             print('Computing P for train data')
-            P = compute_optimal_P(IPsi=IPsi, J_X=create_train_jac_it, U=U)
+            P = compute_optimal_P(IPsi=IPsi, J_X=create_train_proj_jac_it, U=U)
             print('Computing performance of P on test data')
             create_Sigma_P_s_it = compute_Sigma_P(P=P, IPsi=IPsi_ref,
-                                            J_X=create_test_jac_it,
+                                            J_X=create_test_proj_jac_it,
                                             s_iterable=s_list)
             assert callable(create_Sigma_P_s_it) 
             for s, Sigma_P_s in zip(s_list, create_Sigma_P_s_it()):
@@ -339,7 +337,7 @@ def run_main(cfg: DictConfig) -> None:
             print('Computing performance of P on test data')
             results[seed]['subset'][method]['metrics'] = {}
             create_Sigma_P_s_it = compute_Sigma_P(P=P, IPsi=IPsi_ref,
-                                            J_X=create_test_jac_it,
+                                            J_X=create_test_proj_jac_it,
                                             s_iterable=s_list)
             assert callable(create_Sigma_P_s_it)
             for Sigma_P_s in create_Sigma_P_s_it():

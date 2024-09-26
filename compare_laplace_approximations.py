@@ -210,7 +210,7 @@ def run_main(cfg: DictConfig) -> None:
                 'InvPsi': None}
             IPsi_ref = HalfInvPsi(V=create_V_it, prior_precision=prior_precision)
         else:
-            assert reference_method in laplace_methods
+            assert reference_method.startswith('file') or reference_method in laplace_methods
 
         for method_name in laplace_methods:
             if method_name == 'file':
@@ -255,7 +255,7 @@ def run_main(cfg: DictConfig) -> None:
         print('>>>>> Collecting subset methods')
         results[seed]['subset'] = {}
         for method in subset_methods:
-            print(f'Considering subset {method}')
+            print(f'Computing {method}')
             if method == 'swag':
                 subset_kwargs = dict(cfg.data.swag_kwargs)
             else:
@@ -301,7 +301,7 @@ def run_main(cfg: DictConfig) -> None:
         results[seed]['baseline']['Sigma'] = Sigma_ref
             
         # collect metrics for low_rank methods
-        print('Considering low rank methods\n............')
+        print('>>>>>> Evaluating low rank methods\n............')
         for method in results[seed]['low_rank'].keys():
             if not compute_reference_method and method == reference_method:
                 continue
@@ -328,7 +328,7 @@ def run_main(cfg: DictConfig) -> None:
                     Sigma_approx=Sigma_P_s, Sigma=Sigma_ref)
         
         # collect metrics for subet methods
-        print('Considering subset methods\n............')
+        print('>>>>>> Evaluating subset methods\n............')
         for method in results[seed]['subset'].keys():
             print(f'> Computing results for {method}')
             Ind = results[seed]['subset'][method]['Indices']

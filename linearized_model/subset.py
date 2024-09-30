@@ -14,11 +14,11 @@ import laplace.utils
 import laplace.utils.subnetmask
 
 
-class submodel_indices():
+class subset_indices():
     def __init__(self, model: nn.Module,
                  likelihood: Literal['regression','classification'],
                  train_loader: DataLoader,
-                 method: Literal['diagonal', 'magnitude','swag']='diagonal',
+                 method: Literal['diagonal', 'magnitude','swag','custom']='diagonal',
                  **kwargs) -> None:
         self.number_of_parameters = sum([p.numel() for p in model.parameters()])
         if method == 'diagonal':
@@ -37,10 +37,13 @@ class submodel_indices():
                                                                     n_params_subnet=self.number_of_parameters,
                                                                     likelihood=likelihood,
                                                                     **kwargs)
+        elif method == 'custom':
+            self.metric = kwargs['metric']
         else:
             raise NotImplementedError
             
-        self.metric = self.subnet_mask.compute_param_scores(train_loader=train_loader)
+        if method != 'custom':
+            self.metric = self.subnet_mask.compute_param_scores(train_loader=train_loader)
 
     
     def __call__(self, s: int, sort: bool = True):

@@ -21,7 +21,7 @@ from data.dataset import get_dataset
 from pred_model.model import get_model
 from linearized_model.low_rank_laplace import FullInvPsi, HalfInvPsi,\
     KronInvPsi, compute_Sigma, compute_optimal_P, compute_Sigma_P
-from linearized_model.submodel import submodel_indices
+from linearized_model.subset import subset_indices
 from linearized_model.approximation_metrics import update_performance_metrics
 
 # default parameters
@@ -73,9 +73,11 @@ def run_main(cfg: DictConfig) -> None:
     results['seed_list'] = seed_list
     reference_method = getattr(cfg, 'reference_method',None)
         
-    compute_reference_method = getattr(cfg, 'compute_reference_method', True)
     s_max = getattr(cfg, 's_max', None)
     s_step = getattr(cfg, 's_step', default_s_step)
+
+    compute_reference_method = getattr(cfg, 'compute_reference_method', True)
+    store_p = getattr(cfg, 'store_p',False)
 
     # Fix reference method 
     if reference_method is None:
@@ -261,7 +263,7 @@ def run_main(cfg: DictConfig) -> None:
                 subset_kwargs = dict(cfg.data.swag_kwargs)
             else:
                 subset_kwargs = {}
-            results[seed]['subset'][method] = {'Indices': submodel_indices(model=model,
+            results[seed]['subset'][method] = {'Indices': subset_indices(model=model,
                                                                     likelihood=likelihood,
                                                                     train_loader=fit_dataloader,
                                                                     method=method,
@@ -288,6 +290,8 @@ def run_main(cfg: DictConfig) -> None:
                                 J_X=create_test_proj_jac_it,
                                 U=U)
             results[seed]['baseline']['metrics'] = {}
+            if store_p:
+                results[seed]['baseline']['P'] = P
             create_Sigma_P_s_it = compute_Sigma_P(P=P, IPsi=IPsi_ref,
                                             J_X=create_test_proj_jac_it,
                                             s_iterable=s_list)
@@ -318,6 +322,8 @@ def run_main(cfg: DictConfig) -> None:
             U, Lamb = IPsi.Sigma_svd(create_train_proj_jac_it)
             print('Computing P for train data')
             P = compute_optimal_P(IPsi=IPsi, J_X=create_train_proj_jac_it, U=U)
+            if store_p:
+                results[seed]['low_rank'][method]['P'] = P
             print('Computing performance of P on test data')
             create_Sigma_P_s_it = compute_Sigma_P(P=P, IPsi=IPsi_ref,
                                             J_X=create_test_proj_jac_it,

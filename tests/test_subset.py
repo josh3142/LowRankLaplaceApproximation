@@ -49,7 +49,7 @@ def init_data(request) -> Tuple:
 
 
 @pytest.mark.parametrize('init_data', ('classification','regression'), indirect=True)
-def test_submodel_projector(init_data: Tuple):
+def test_subset_projector(init_data: Tuple):
     model, train_loader, test_loader, X_test, device, likelihood = init_data
     submodel_method = 'magnitude'
     s = 10
@@ -57,6 +57,7 @@ def test_submodel_projector(init_data: Tuple):
     subind = subset_indices(model=model, likelihood=likelihood,
                             train_loader=train_loader,
                             method=submodel_method)
+    # test projector with theoretical value
     P = subind.P(s).to(device)
     la = Laplace(model,
                 likelihood=likelihood,
@@ -76,11 +77,18 @@ def test_submodel_projector(init_data: Tuple):
     Sigma_P_library = subla.functional_covariance(Js=sub_J_X)
     assert torch.allclose(Sigma_P_analytical, Sigma_P_library, atol=a_tol)
 
+    # test subset property
+    s_max = subind.metric.size(0)
+    s_test = torch.randint(low=1, high=s_max-1,size=(1,)).item()
+    P_from_s_max = subind.P(s_max)[:,:s_test]
+    P_s_test = subind.P(s_test)
+    assert torch.equal(P_from_s_max, P_s_test)
+
 
 
 
 @pytest.mark.parametrize('init_data', ['classification','regression'], indirect=True)
-def test_submodel_methods(init_data: Tuple):
+def test_subset_methods(init_data: Tuple):
     model, train_loader, test_loader, X_test, device, likelihood = init_data
     # diagonal
     subind = subset_indices(model=model, likelihood=likelihood,

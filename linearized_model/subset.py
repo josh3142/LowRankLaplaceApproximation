@@ -46,14 +46,14 @@ class subset_indices():
             self.metric = self.subnet_mask.compute_param_scores(train_loader=train_loader)
 
     
-    def __call__(self, s: int, sort: bool = True):
+    def __call__(self, s: int, sort: bool = False):
         idcs_select = torch.topk(self.metric, s).indices
         if sort: 
             idcs_select = idcs_select.sort()[0]
         return idcs_select
 
 
-    def P(self, s, sort: bool=True) -> torch.Tensor:
+    def P(self, s, sort: bool=False) -> torch.Tensor:
         idx = self.__call__(s, sort=sort)
         return subP(number_of_parameters=self.number_of_parameters, idx=idx).to(self.metric.device)
 

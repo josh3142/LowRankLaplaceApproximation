@@ -61,11 +61,11 @@ def test_subset_projector(init_data: Tuple):
     submodel_method = 'magnitude'
     s = 10
     a_tol = 1e-5
-    subind = subset_indices(model=model, likelihood=likelihood,
+    Ind = subset_indices(model=model, likelihood=likelihood,
                             train_loader=train_loader,
                             method=submodel_method)
     # test projector with theoretical value
-    P = subind.P(s).to(device)
+    P = Ind.P(s).to(device)
     la = Laplace(model,
                 likelihood=likelihood,
                 subset_of_weights='all',
@@ -75,20 +75,20 @@ def test_subset_projector(init_data: Tuple):
         likelihood=likelihood, 
         subset_of_weights="subnetwork",
         hessian_structure='full',
-        subnetwork_indices=subind(s))
+        subnetwork_indices=Ind(s))
     subla.fit(train_loader=train_loader)
     IPsi = FullInvPsi(inv_Psi=la.posterior_precision)
     J_X = get_jacobian(X=X_test, model=model, is_classification=False).to(device)
-    sub_J_X = J_X.index_select(dim=-1, index=subind(s))
+    sub_J_X = J_X.index_select(dim=-1, index=Ind(s))
     Sigma_P_analytical = compute_Sigma_P(P=P, IPsi=IPsi, J_X=J_X)
     Sigma_P_library = subla.functional_covariance(Js=sub_J_X)
     assert torch.allclose(Sigma_P_analytical, Sigma_P_library, atol=a_tol)
 
     # test subset property
-    s_max = subind.metric.size(0)
+    s_max = Ind.metric.size(0)
     s_test = torch.randint(low=1, high=s_max-1,size=(1,)).item()
-    P_from_s_max = subind.P(s_max)[:,:s_test]
-    P_s_test = subind.P(s_test)
+    P_from_s_max = Ind.P(s_max)[:,:s_test]
+    P_s_test = Ind.P(s_test)
     assert torch.equal(P_from_s_max, P_s_test)
 
 

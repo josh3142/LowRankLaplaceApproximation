@@ -1,12 +1,15 @@
-from typing import Literal, Optional, Callable
+from typing import Literal, Optional, Callable, Tuple
 import math
 
 import pytest
 import torch
 
-from utils import (iterator_wise_quadratic_form, 
-                   iterator_wise_matmul, 
-                   flatten_batch_and_target_dimension)
+from utils import (
+    iterator_wise_quadratic_form,
+    iterator_wise_matmul,
+    flatten_batch_and_target_dimension,
+    estimate_regression_likelihood_sigma
+)
 
 @pytest.fixture
 def iterative_framework() -> Callable:
@@ -36,6 +39,33 @@ def iterative_framework() -> Callable:
         return J, create_J_iterator, quadratic_form, number_of_batches, generator
     return _create_iterative_framework
 
+@pytest.fixture
+def random_regression_data(request) -> Tuple:
+    target_dim = request.param
+    seed = 0
+    n_data = 1000
+    std = 1
+    batch_size = 100
+    generator = torch.Generator().manual_seed(seed)
+    X = torch.randn((n_data, target_dim), generator=generator)
+    deviation = std * torch.randn((n_data, target_dim), generator=generator)
+    Y = X + deviation
+    emp_std = torch.std(deviation).item()
+    dataset = TensorDataset(X, Y)
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
+    class ToyModel(nn.Module):
+        def __init__(self, X=X):
+            super().__init__()
+            self.batch_counter = 0
+            self._X = X
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            out = self._X[self.batch_counter:self.batch_counter+x.size(0)]
+            self.batch_counter += x.size(0)
+            return out
+    model = ToyModel(X=X)
+    return dataloader, model, emp_std
+    
 
 def test_iterator_wise_quadratic_form(iterative_framework: Callable):
     J, create_J_iterator, quadratic_form, number_of_batches, _ = \
@@ -94,4 +124,14 @@ def test_flatten_iterator(iterative_framework: Callable, class_dim_entry):
 
     
 
+
+@pytest.mark.parametrize('random_regression_data', [1,3,10], indirect=True)
+def test_estimate_regression_likelihood_sigma(random_regression_data: Tuple):
+    dataloader, model, emp_std = random_regression_data
+    estimated_std = estimate_regression_likelihood_sigma(
+        model=model,
+        dataloader=dataloader,
+        )
+    assert torch.isclose(torch.tensor(estimated_std), torch.tensor(emp_std))
+    
 

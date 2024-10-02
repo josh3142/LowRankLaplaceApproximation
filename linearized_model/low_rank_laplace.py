@@ -6,6 +6,7 @@ import torch
 import torch.nn as nn
 from laplace import KronLaplace, FullLaplace
 
+from projector.projector1d import get_jacobian
 from utils import iterator_wise_quadratic_form, iterator_wise_matmul, \
     flatten_batch_and_target_dimension
 
@@ -22,6 +23,15 @@ class InvPsi():
     def Sigma(self, J_X: torch.Tensor) -> torch.Tensor:
         """Returns J_X @ Psi @ J_X.T"""
         raise NotImplementedError
+
+    def Sigma_batchwise(self, J_X: torch.Tensor) -> torch.Tensor:
+        # need shape of type batchxtargetxparmeters
+        assert len(J_X.shape) == 3
+        J_X_T = J_X.transpose(dim0=0, dim1=2)
+        Psi_times_J_X_T = self.Psi_times_W(W=J_X_T).view(J_X_T.shape)
+        return torch.einsum('btp,pTb -> btT',J_X, Psi_times_J_X_T)
+
+
 
     def Sigma_iterative(self, create_J_X_iterator: Callable[[],Iterable]) -> torch.Tensor:
         return iterator_wise_quadratic_form(quadratic_form=self.bilinear_Psi_form,
@@ -77,17 +87,18 @@ class FullInvPsi(InvPsi):
     def Psi_times_W(self, W: torch.Tensor) -> torch.Tensor:
         assert self.inv_Psi_matrix.size(0) == W.size(0), "Size mismatch"
         # flatten W to make it 2D
-        flat_W = W.view(W.size(0), -1)
+        flat_W = W.reshape(W.size(0), -1)
         # multiply with inv(inv_Psi) by solving linear system
         Psi_times_flat_W = torch.linalg.solve(self.inv_Psi_matrix, flat_W) 
         # restore shape
         return Psi_times_flat_W.view(W.shape)
-        
 
+        
     def Sigma(self, J_X: torch.Tensor) -> torch.Tensor:
         J_X = flatten_batch_and_target_dimension(J_X)
         Psi_times_J_X_T = self.Psi_times_W(J_X.T)
         return J_X @ Psi_times_J_X_T
+
 
 
     def quadratic_form(self, W: torch.Tensor) -> torch.Tensor: 
@@ -163,7 +174,7 @@ class KronInvPsi(InvPsi):
 
     def Psi_times_W(self, W: torch.Tensor) -> torch.Tensor:
         # flatten W to make it 2D
-        flat_W = W.view(W.size(0), -1)
+        flat_W = W.reshape(W.size(0), -1)
         # multiply with flat_W by using bmm
         # transpose to match dimensions
         Psi_times_flat_W = self.inv_Psi.posterior_precision.bmm(flat_W.T, exponent=-1).T
@@ -208,7 +219,7 @@ def compute_Sigma_s(U: torch.Tensor, Lamb: torch.Tensor,
     return U_s @ torch.diag(Lamb_s) @ U_s.T
 
 def compute_optimal_P(IPsi: InvPsi, J_X: Union[torch.Tensor, Callable[[], Iterable]],
-                      U: torch.Tensor, s: Optional[float]=None,
+                      U: torch.Tensor, s: Optional[int]=None,
                       Q: Optional[torch.Tensor]=None) -> torch.Tensor:
         if s is not None:
             U_s = U[:,:s]
@@ -244,4 +255,47 @@ def compute_Sigma_P(P: torch.Tensor, IPsi: InvPsi,
                 P_s_T_inv_Psi_P_s_T = P_T_inv_Psi_P[:s,:s]
                 yield J_X_times_P_s @ torch.linalg.inv(P_s_T_inv_Psi_P_s_T) @ J_X_times_P_s.T
         return create_Sigma_P_iterator
+
+
+def IPsi_predictive(X: torch.Tensor, model: nn.Module, IPsi: InvPsi,
+                   P: Optional[torch.Tensor],
+                   chunk_size: Optional[int]  = None,
+                   regression_likelihood_sigma: Optional[float] = None,
+                   ) -> Tuple[torch.Tensor, torch.Tensor]:
+    """Computes predictions and covariances for all the input in X for the
+    linearized model produced from `model`, `IPsi` and `P` (optional). If `P`
+    is not `None` the projected model is used, otherwise the full model is used.
+    A `chunk_size`
+    can be specified for the internal computation of the jacobian.
+    If `regression_likelihood_sigma` is specified the (homoscedastic) variance
+    of the likelihood is accounted for. This should only be done for regression
+    problems.
+    """
+    # predictions
+    model.eval()
+    predictions = model(X).detach()
+    # uncertainties
+    J_X = get_jacobian(model, X=X, is_classification=False,
+                    chunk_size=chunk_size).detach()
+    if P is not None:
+        inv_P_T_inv_Psi_P = torch.linalg.inv(IPsi.quadratic_form(W=P))
+        # batch_size x target dimension x number of parameters
+        assert len(J_X.shape) == 3
+        J_X_P = torch.einsum('btp,ps->bts', J_X, P)
+        variances = torch.einsum('bts,sS,STb->btT',J_X_P,inv_P_T_inv_Psi_P,
+                                J_X_P.transpose(0,-1))
+    else:
+        variances = IPsi.Sigma_batchwise(J_X=J_X)
+    
+    if regression_likelihood_sigma is not None:
+        assert len(variances.shape) == 3 # batch x target x target
+        variances += regression_likelihood_sigma**2 \
+            * torch.eye(variances.size(-1)).to(variances.device)
+
+
+        
+    
+    return predictions, variances
+    
+
 

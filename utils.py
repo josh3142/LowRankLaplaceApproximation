@@ -305,3 +305,26 @@ def flatten_batch_and_target_dimension(J_X: Union[torch.Tensor,
                 yield flatten_batch_and_target_dimension(J_X=j)
         return create_flattened_iterator
 
+def estimate_regression_likelihood_sigma(
+    model: nn.Module,
+    dataloader: DataLoader,
+    device: Optional[torch.device] = None,
+    ) -> float:
+    """ Estimates the root mean square error of `model` (in `eval` mode) on data
+    provided by `dataloader`."""
+    residual_collection = []
+    model_train_mode = model.training
+    model.eval()
+    for x, y in dataloader:
+        if device is not None:
+            x, y = x.to(device), y.to(device)
+            if len(y.shape) == 1:
+                y = y[:,None] # add target dimension if missing
+        out = model(x)
+        assert out.shape == y.shape
+        residual_collection.append((out-y).detach().cpu().flatten())
+    residual_collection = torch.concat(residual_collection)
+    if model_train_mode:
+        model.train()
+    return torch.std(residual_collection).item()
+    

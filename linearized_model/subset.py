@@ -1,7 +1,7 @@
 """ Wraps the submodel routine of `laplace`
 into a suitable framework.
 """
-from typing import Literal, Union, Iterable
+from typing import Literal, Tuple
 
 import torch
 import torch.nn as nn
@@ -20,6 +20,7 @@ class subset_indices():
                  train_loader: DataLoader,
                  method: Literal['diagonal', 'magnitude','swag','custom']='diagonal',
                  **kwargs) -> None:
+        self.method = method
         self.number_of_parameters = sum([p.numel() for p in model.parameters()])
         if method == 'diagonal':
             diag_laplace_model = laplace.Laplace(model=model,
@@ -65,9 +66,3 @@ def subP(number_of_parameters: int, idx: torch.Tensor) -> torch.Tensor:
 
 
     
-
-  
-
-
-        
-

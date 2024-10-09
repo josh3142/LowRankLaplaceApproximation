@@ -107,7 +107,7 @@ def test_subset_methods(init_data: Tuple):
     assert torch.allclose(torch.abs(parameter_vector), subind.metric)
 
 
-@pytest.mark.parametrize('init_data', ['classification'], indirect=True)
+@pytest.mark.parametrize('init_data', ['regression', 'classification'], indirect=True)
 def test_SWAG_subset_index_selection_and_posterior_precision(init_data: Tuple):
     """ 
     Test if for SWAG the index selection and the posterior precision of the

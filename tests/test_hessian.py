@@ -72,8 +72,8 @@ class ToyModel(nn.Module):
         
         return - (
             - y_hat_true_class**(-2) * torch.einsum("bi, bj -> bij", 
-                                                    self.get_dy_hat_true_class(x, y), 
-                                                    self.get_dy_hat_true_class(x, y))
+                                                self.get_dy_hat_true_class(x, y), 
+                                                self.get_dy_hat_true_class(x, y))
             + y_hat_true_class**(-1) * self.get_ddy_hat_true_class(x, y)
        )
 
@@ -82,15 +82,19 @@ class ToyModel(nn.Module):
         Computes 
         ```
             1 / 2 * \nabla_p^2 ((y_hat_0 - y_0)**2 + (y_hat_1 - y_1)**2) 
-            = nabla_p y_hat_0 + nabla_p y_hat_0 + (y_hat_0 - y_0) nabla_p**2 y_hat_0
-            + ... (same with index 0 replaced by index 1)
+            = nabla_p y_hat_0 + nabla_p y_hat_0 + (y_hat_0 - y_0) nabla_p**2 
+            y_hat_0 + ... (same with index 0 replaced by index 1)
         ```
         """
         zero = torch.zeros_like(x)
         y_hat = self.get_y_hat(x)
         dy_hat_fun = lambda x: torch.stack([
-            torch.cat([self.p[2] * x, self.p[2] * x**2, self.p[0] * x + self.p[1] * x**2, zero], axis=-1),
-            torch.cat([self.p[3] * x, self.p[3] * x**2, torch.zeros_like(x), self.p[0] * x + self.p[1] * x**2], axis=-1)
+            torch.cat([self.p[2] * x, self.p[2] * x**2, 
+                       self.p[0] * x + self.p[1] * x**2, zero], 
+                       axis=-1),
+            torch.cat([self.p[3] * x, self.p[3] * x**2, torch.zeros_like(x), 
+                       self.p[0] * x + self.p[1] * x**2], 
+                       axis=-1)
         ], axis=-1)
         ddy_hat_fun = lambda x: torch.stack([
             torch.stack([
@@ -109,9 +113,9 @@ class ToyModel(nn.Module):
         outer_prod = lambda x: torch.einsum("bi, bj -> bij", x, x)
 
         return (outer_prod(dy_hat_fun(x)[..., 0]) + 
-                (y_hat[:, 0] - y[:, 0])[:, None, None] * (ddy_hat_fun(x)[..., 0]) +
-                outer_prod(dy_hat_fun(x)[..., 1]) + 
-                (y_hat[:, 1] - y[:, 1])[:, None, None] * (ddy_hat_fun(x)[..., 1]))
+            (y_hat[:, 0] - y[:, 0])[:, None, None] * (ddy_hat_fun(x)[..., 0]) +
+            outer_prod(dy_hat_fun(x)[..., 1]) + 
+            (y_hat[:, 1] - y[:, 1])[:, None, None] * (ddy_hat_fun(x)[..., 1]))
     
 
     def forward(self, x: Tensor) -> Tensor:
@@ -121,7 +125,11 @@ class ToyModel(nn.Module):
 def model_fun(model: nn.Module, param_vec: Tensor, param_dict: dict, X: Tensor
     ) -> Callable:
     "Helper fun that takes as input the model parameters to take derivates."
-    return lambda param_vec: functional_call(model, vec_to_dict(param_vec, param_dict), X)
+    return lambda param_vec: functional_call(
+        model, 
+        vec_to_dict(param_vec, param_dict), 
+        X
+    )
 
 
 @pytest.fixture
@@ -234,9 +242,11 @@ def test_H_sum_gaussian_nll(init_data: Tuple):
 
     # compute true Hessian
     Y_hat = model(X)
-    dY_hat = jacrev(model_fun(model, param_vec, model.named_parameters(), X))(param_vec)
+    dY_hat = jacrev(model_fun(model, param_vec, model.named_parameters(), X)
+                    )(param_vec)
     dY_hat2 = torch.einsum("bij, bil -> bijl", dY_hat, dY_hat)
-    ddY_hat = hessian(model_fun(model, param_vec, model.named_parameters(), X))(param_vec)
+    ddY_hat = hessian(model_fun(model, param_vec, model.named_parameters(), X)
+                      )(param_vec)
     ddY_hat2 = torch.einsum("bi, bijl -> bijl", Y - Y_hat, ddY_hat)
     H_true = 1 / var * (dY_hat2 - ddY_hat2).sum(dim=(0,1))
 

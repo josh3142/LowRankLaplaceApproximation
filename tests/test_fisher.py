@@ -52,8 +52,13 @@ class ToyModel(nn.Module):
     def get_dy_hat(self, x: Tensor) -> Tensor:
         zero = torch.zeros_like(x)
         return torch.stack([
-            torch.cat([self.p[2] * x, self.p[2] * x**2, self.p[0] * x + self.p[1] * x**2, zero], axis=-1),
-            torch.cat([self.p[3] * x, self.p[3] * x**2, torch.zeros_like(x), self.p[0] * x + self.p[1] * x**2], axis=-1)
+            torch.cat(
+                [self.p[2] * x, self.p[2] * x**2, 
+                 self.p[0] * x + self.p[1] * x**2, zero], 
+                 axis=-1),
+            torch.cat([self.p[3] * x, self.p[3] * x**2, 
+                       torch.zeros_like(x), self.p[0] * x + self.p[1] * x**2], 
+                       axis=-1)
         ], axis=-1)
 
     def get_fisher_categorical(self, x: Tensor) -> Tensor:
@@ -261,6 +266,10 @@ def test_get_V_iterator_gaussian(init_data: Tuple, is_classification: bool):
     dl = DataLoader(TensorDataset(X, Y), batch_size=8, shuffle=False)
 
     Vs = get_Vs(model, dl, is_classification=is_classification)
-    V_it = get_V_iterator(model=model, dl=dl, is_classification=is_classification)
+    V_it = get_V_iterator(
+        model=model, 
+        dl=dl, 
+        is_classification=is_classification
+    )
     concat_V_it = torch.concat([v for v in V_it], dim=0)
     assert torch.allclose(Vs, concat_V_it.cpu(), atol=1e-5)

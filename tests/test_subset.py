@@ -1,4 +1,4 @@
-from typing import Tuple, Literal
+from typing import Tuple
 
 from laplace import Laplace
 import pytest
@@ -12,7 +12,7 @@ from laplace.utils import  LargestVarianceSWAGSubnetMask
 
 from linearized_model.low_rank_laplace import FullInvPsi
 from projector.projector1d import get_jacobian
-from linearized_model.low_rank_laplace import compute_Sigma, compute_Sigma_P
+from linearized_model.low_rank_laplace import compute_Sigma_P
 from linearized_model.subset import subset_indices
 
 @pytest.fixture
@@ -28,11 +28,17 @@ def init_data(request) -> Tuple:
     X_train = torch.randn(n_train_data, n_input).to(device).to(dtype)
     X_test = torch.randn(n_train_data, n_input).to(device).to(dtype)
     if likelihood == 'classification':
-        Y_train = torch.randint(low=0, high=n_class, size=(n_train_data,), dtype=torch.int64).to(device)
-        Y_test = torch.randint(low=0, high=n_class, size=(n_train_data,), dtype=torch.int64).to(device)
+        Y_train = torch.randint(
+            low=0, high=n_class, size=(n_train_data,), dtype=torch.int64
+        ).to(device)
+        Y_test = torch.randint(
+            low=0, high=n_class, size=(n_train_data,), dtype=torch.int64
+        ).to(device)
     else:
-        Y_train = torch.randn(size=(n_train_data,n_class), dtype=dtype).to(device)
-        Y_test = torch.randn(size=(n_train_data,n_class), dtype=dtype).to(device)
+        Y_train = torch.randn(size=(n_train_data,n_class), 
+                              dtype=dtype).to(device)
+        Y_test = torch.randn(size=(n_train_data,n_class), 
+                             dtype=dtype).to(device)
     
     # create dataloaders
     train_data = TensorDataset(X_train, Y_train)

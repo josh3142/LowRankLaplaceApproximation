@@ -1,14 +1,22 @@
-from typing import Literal, Tuple, Optional, Callable
+from typing import Literal, Optional, Callable
 import math
 
 import pytest
 import torch
 
-from utils import iterator_wise_quadratic_form, iterator_wise_matmul, flatten_batch_and_target_dimension
+from utils import (iterator_wise_quadratic_form, 
+                   iterator_wise_matmul, 
+                   flatten_batch_and_target_dimension)
 
 @pytest.fixture
 def iterative_framework() -> Callable:
-    def _create_iterative_framework(seed=0, n=101, p=5, batch_size=10, class_dim_entry: Optional[int]=None):
+    def _create_iterative_framework(
+            seed: int=0, 
+            n: int=101, 
+            p: int=5, 
+            batch_size: int=10, 
+            class_dim_entry: Optional[int]=None
+        ):
         generator = torch.Generator().manual_seed(seed)
         if class_dim_entry is None:
             J = torch.randn(n, p, generator=generator)
@@ -30,46 +38,58 @@ def iterative_framework() -> Callable:
 
 
 def test_iterator_wise_quadratic_form(iterative_framework: Callable):
-    J, create_J_iterator, quadratic_form, number_of_batches, generator = iterative_framework()
+    J, create_J_iterator, quadratic_form, number_of_batches, _ = \
+        iterative_framework()
     # Test dim = 0
-    computed_value = iterator_wise_quadratic_form(quadratic_form=quadratic_form,
-                                                  create_iterator=create_J_iterator)
+    computed_value = iterator_wise_quadratic_form(
+        quadratic_form=quadratic_form,
+        create_iterator=create_J_iterator)
     theoretical_value = J.repeat(1,number_of_batches)
     assert torch.equal(computed_value, theoretical_value)
     # Test dim = 1
     quadratic_form_2 = lambda x,y: quadratic_form(x,y,dim=1)
-    computed_value = iterator_wise_quadratic_form(quadratic_form=quadratic_form_2,
-                                                  create_iterator=create_J_iterator)
+    computed_value = iterator_wise_quadratic_form(
+        quadratic_form=quadratic_form_2,
+        create_iterator=create_J_iterator)
     theoretical_value = J.T.repeat(number_of_batches, 1)
     assert torch.equal(computed_value, theoretical_value)
 
 
 def test_iterator_wise_matmul(iterative_framework: Callable):
-    J, create_J_iterator, quadratic_form, number_of_batches, generator = iterative_framework()
+    J, create_J_iterator, _, _, generator = iterative_framework()
 
     # test dim=0
     W = torch.randn(J.size(-1), 10, generator=generator)
 
     theoretical_value = J @ W
-    computed_value = iterator_wise_matmul(create_a_iterator=create_J_iterator, 
-                                          b=W)
+    computed_value = iterator_wise_matmul(
+        create_a_iterator=create_J_iterator, 
+        b=W
+    )
     assert torch.all(torch.isclose(theoretical_value, computed_value))
     # test dim=1
     W = torch.randn(J.size(0), 10, generator=generator)
 
     theoretical_value = J.T @ W
-    computed_value = iterator_wise_matmul(create_a_iterator=create_J_iterator, 
-                                          b=W, transpose_a=True, iteration_dim=1)
+    computed_value = iterator_wise_matmul(
+        create_a_iterator=create_J_iterator, 
+        b=W, 
+        transpose_a=True, 
+        iteration_dim=1
+    )
     assert torch.all(torch.isclose(theoretical_value, computed_value))
 
 
-
-@pytest.mark.parametrize('class_dim_entry',[None, 10])
+@pytest.mark.parametrize('class_dim_entry', [None, 10])
 def test_flatten_iterator(iterative_framework: Callable, class_dim_entry):
-    J, create_J_iterator, quadratic_form, number_of_batches, generator = iterative_framework(class_dim_entry=class_dim_entry)
+    J, get_J_iterator, _, _, _ = \
+        iterative_framework(class_dim_entry=class_dim_entry)
     flat_J = flatten_batch_and_target_dimension(J)
-    create_flat_J_iterator = flatten_batch_and_target_dimension(create_J_iterator)
-    assert torch.equal(flat_J, torch.concat([j for j in create_flat_J_iterator()]))
+    create_flat_J_iterator = flatten_batch_and_target_dimension(get_J_iterator)
+    assert torch.equal(
+        flat_J, 
+        torch.concat([j for j in create_flat_J_iterator()])
+    )
     
 
     

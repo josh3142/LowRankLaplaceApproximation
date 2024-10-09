@@ -1,15 +1,13 @@
 from math import ceil
 from typing import Tuple, Iterable
 
-from laplace import Laplace
 import pytest
 import torch
 from torch.utils.data import TensorDataset, DataLoader
 import torch.nn as nn
-from torch.nn.utils import parameters_to_vector
 
 import laplace
-from laplace import KronLaplace, FullLaplace
+from laplace import KronLaplace
 
 from utils import flatten_batch_and_target_dimension
 from projector.projector1d import get_jacobian
@@ -233,7 +231,9 @@ def test_compute_Sigma(random_inv_psi: Tuple):
 def test_optimal_P(init_data: Tuple):
     model, train_loader, test_loader, X_test, device, likelihood, generator, \
         dtype, prior_precision  = init_data
-    J_X = flatten_batch_and_target_dimension(get_jacobian(X=X_test, model=model).to(device))
+    J_X = flatten_batch_and_target_dimension(
+        get_jacobian(X=X_test, model=model).to(device)
+    )
     def create_J_X_iterator(J_X=J_X, batch_size=11) -> Iterable:
         number_of_batches = ceil(J_X.size(0)/batch_size)
         for i in range(number_of_batches):
@@ -256,8 +256,8 @@ def test_optimal_P(init_data: Tuple):
                                         J_X=J_X,
                                         s_iterable=s_list)()):
         P_s = P[:,:s]
-        theoretical_Sigma_P_s = J_X @ P_s @ torch.linalg.inv(P_s.T @ inv_Psi @ P_s)\
-              @ P_s.T @ J_X.T
+        theoretical_Sigma_P_s = J_X @ P_s @ \
+            torch.linalg.inv(P_s.T @ inv_Psi @ P_s) @ P_s.T @ J_X.T
         # assert torch.all(torch.isclose(Sigma_P_s,theoretical_Sigma_P_s))
         assert torch.all(torch.isclose(theoretical_Sigma_P_s,
                                        compute_Sigma_P(P=P_s,

@@ -8,6 +8,7 @@ import torch.nn as nn
 from torch.nn.utils import parameters_to_vector
 
 import laplace
+from laplace.utils import  LargestVarianceSWAGSubnetMask
 
 from linearized_model.low_rank_laplace import FullInvPsi
 from projector.projector1d import get_jacobian
@@ -85,8 +86,6 @@ def test_subset_projector(init_data: Tuple):
     assert torch.equal(P_from_s_max, P_s_test)
 
 
-
-
 @pytest.mark.parametrize('init_data', ['classification','regression'], indirect=True)
 def test_subset_methods(init_data: Tuple):
     model, train_loader, test_loader, X_test, device, likelihood = init_data
@@ -106,3 +105,66 @@ def test_subset_methods(init_data: Tuple):
                      train_loader=train_loader, method='magnitude')
     parameter_vector = parameters_to_vector(model.parameters())
     assert torch.allclose(torch.abs(parameter_vector), subind.metric)
+
+
+@pytest.mark.parametrize('init_data', ['classification'], indirect=True)
+def test_SWAG_subset_index_selection_and_posterior_precision(init_data: Tuple):
+    """ 
+    Test if for SWAG the index selection and the posterior precision of the
+    laplace library and own method coincide. 
+    """
+    model, train_loader, test_loader, X_test, _, likelihood = init_data
+    n_select = 10
+
+    # index selection
+    # laplace library
+    subnetmask_kwargs = dict(
+        model=model, 
+        likelihood=likelihood,
+        n_params_subnet=n_select)
+    subnetmask = LargestVarianceSWAGSubnetMask(**subnetmask_kwargs)
+    subnetmask.select(train_loader)
+    idcs_select = subnetmask.indices
+
+    # method to test
+    idcs_fun = subset_indices(
+        model=model, 
+        likelihood=likelihood, 
+        train_loader=train_loader, 
+        method='swag', 
+        swag_lr=1e-2, 
+        swag_n_snapshots=40
+    )
+    idcs_select_to_test = idcs_fun(n_select, sort=True)
+    print(idcs_select)
+    print(idcs_select_to_test)
+    assert torch.equal(idcs_select, idcs_select_to_test)
+
+    # posterior precision
+    # laplace library
+    lasub = Laplace(model,
+        likelihood=likelihood, 
+        subset_of_weights="subnetwork",
+        hessian_structure='full',
+        subnetwork_indices=idcs_select.cpu()
+    )
+    lasub.fit(test_loader)
+
+    # own method
+    J = get_jacobian(
+        model, 
+        X_test,
+        fun= (lambda x: x) if likelihood=="regression" else \
+            (lambda x: 2 * torch.sqrt(x)),
+        is_classification=likelihood=="classification",
+    )
+    I = torch.einsum("bck, bcl -> kl", J, J)
+    inv_psi = torch.eye(I.shape[0]) + I
+
+    P = idcs_fun.P(s=n_select, sort=True) 
+    posterior_precision = P.T @ inv_psi @ P
+    assert torch.allclose(posterior_precision, lasub.posterior_precision)
+
+
+
+

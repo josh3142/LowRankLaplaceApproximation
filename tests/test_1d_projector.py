@@ -8,8 +8,14 @@ from functools import partial
 import pytest
 from typing import Tuple
 
-from projector.projector1d import (get_gradient_projector_1d, 
-    get_sigma_projected_1d, get_sigma_1d, get_pred_var)
+from projector.projector1d import (
+    get_gradient_projector_1d, 
+    get_sigma_projected_1d,
+    get_sigma_1d,
+    get_pred_var,
+    get_jacobian
+    )
+from pred_model.resnet9 import ResNet9
 from utils import param_to_vec, get_softmax_model_fun
 
 
@@ -119,3 +125,38 @@ def test_get_pred_var():
     Sigma = get_pred_var(j, V)
 
     torch.allclose(Sigma_true, Sigma)
+
+    
+def test_get_jacobian_for_switched_off_batchnorm_layers():
+    # load model with BatchNorm2d layers
+    X = torch.randn(2,3,32,32)
+    model = ResNet9(C=3, n_class=10)
+    model.eval()
+    # compute jacobian before gradient int batchnorm layers
+    # is switched off
+    full_J_x = get_jacobian(model=model, X=X)
+    # switch off Batchnorm2d layers
+    for module in model.modules():
+        if type(module) is nn.BatchNorm2d:
+            for par in module.parameters():
+                par.requires_grad = False
+    # recompute jacobian 
+    sub_J_X = get_jacobian(model=model, X=X)
+
+    # indices for switched off gradients
+    where_requires_grad_False = torch.concat([
+        torch.ones_like(p, dtype=torch.bool).flatten()
+        if not p.requires_grad else 
+        torch.zeros_like(p, dtype=torch.bool).flatten()
+        for p in model.parameters()
+    ])
+    # check whether there really parameters with no requires_grad 
+    assert torch.sum(where_requires_grad_False) > 0
+
+    # test consistency
+    assert torch.allclose(
+        full_J_x[...,torch.logical_not(where_requires_grad_False)],
+        sub_J_X
+    )
+    
+

@@ -6,7 +6,7 @@ import cupy as cp
 import numpy as np
 
 from functools import partial
-from typing import Iterable, Optional, Callable
+from typing import Iterable, Optional, Callable, Generator
 
 from torch.utils.data import DataLoader, Dataset
 
@@ -64,7 +64,8 @@ def get_jacobian(
         chunk_size: Optional[int]=None
     ) -> Tensor:
     """
-    Returns Jacobian for a given `model` and input `X`.
+    Returns Jacobian for a given `model` and input `X`. Only parameters
+    with `requires_grad=True` are considered.
 
     Args:
         model: pytorch model
@@ -77,12 +78,12 @@ def get_jacobian(
             to doing a single vmap over vjp to compute the jacobian)
     """
     model.eval()
-    param_vec = param_to_vec(model.parameters())
+    param_vec = param_to_vec(parameters_with_grad(model))
     if is_classification:
         J = jacrev(
             partial(
                     get_softmax_model_fun, 
-                    param_gen=model.named_parameters(), 
+                    param_gen=named_parameters_with_grad(model), 
                     model=model, 
                     X=X,
                     fun=fun
@@ -92,7 +93,7 @@ def get_jacobian(
         J = jacrev(
             partial(
                     get_model_fun, 
-                    param_gen=model.named_parameters(), 
+                    param_gen=named_parameters_with_grad(model), 
                     model=model, 
                     X=X,
                     fun=fun
@@ -306,3 +307,18 @@ def create_jacobian_data_iterator(dataset: Dataset, batch_size: int,
                                                                   is_classification=False,
                                                                   chunk_size=chunk_size).detach())
 
+def named_parameters_with_grad(model: nn.Module) -> Generator:
+    for name, param in model.named_parameters():
+        if param.requires_grad:
+            yield name, param
+
+def parameters_with_grad(model: nn.Module) -> Generator:
+    for param in model.parameters():
+        if param.requires_grad:
+            yield param
+
+
+def number_of_parameters_with_grad(model: nn.Module) -> int:
+    return sum([p.numel() for _, p in named_parameters_with_grad(model)])
+
+    

@@ -319,6 +319,16 @@ def parameters_with_grad(model: nn.Module) -> Generator:
 
 
 def number_of_parameters_with_grad(model: nn.Module) -> int:
-    return sum([p.numel() for _, p in named_parameters_with_grad(model)])
+    return sum([p.numel() for p in parameters_with_grad(model)])
+
+def where_parameters_with_grad(model: nn.Module) -> torch.Tensor:
+    return torch.concat(
+        [
+        torch.ones_like(p, dtype=torch.bool).flatten() 
+        if p.requires_grad
+        else torch.zeros_like(p, dtype=torch.bool).flatten()
+        for p in model.parameters()
+        ]
+        )
 
     

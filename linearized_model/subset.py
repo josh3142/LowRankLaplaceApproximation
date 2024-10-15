@@ -13,6 +13,11 @@ import laplace
 import laplace.utils
 import laplace.utils.subnetmask
 
+from projector.projector1d import (
+    number_of_parameters_with_grad,
+    where_parameters_with_grad,
+)
+
 
 class subset_indices():
     def __init__(self, model: nn.Module,
@@ -21,7 +26,7 @@ class subset_indices():
                  method: Literal['diagonal', 'magnitude','swag','custom']='diagonal',
                  **kwargs) -> None:
         self.method = method
-        self.number_of_parameters = sum([p.numel() for p in model.parameters()])
+        self.number_of_parameters = number_of_parameters_with_grad(model)
         if method == 'diagonal':
             diag_laplace_model = laplace.Laplace(model=model,
                                             likelihood=likelihood,
@@ -45,6 +50,9 @@ class subset_indices():
             
         if method != 'custom':
             self.metric = self.subnet_mask.compute_param_scores(train_loader=train_loader)
+
+        # only consider those parameters with requires_grad = True
+        self.metric = self.metric[where_parameters_with_grad(model)]
 
     
     def __call__(self, s: int, sort: bool = False):

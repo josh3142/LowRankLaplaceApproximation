@@ -1,3 +1,5 @@
+from copy import deepcopy
+
 import torch
 from torch import nn
 from torch.func import jacrev
@@ -13,7 +15,9 @@ from projector.projector1d import (
     get_sigma_projected_1d,
     get_sigma_1d,
     get_pred_var,
-    get_jacobian
+    get_jacobian,
+    where_parameters_with_grad,
+    number_of_parameters_with_grad,
     )
 from pred_model.resnet9 import ResNet9
 from utils import param_to_vec, get_softmax_model_fun
@@ -34,6 +38,29 @@ def init_data() -> Tuple:
         ).to(dtype=torch.float64)
     
     return model, X, Y
+
+@pytest.fixture
+def resnet_without_batchnorm_grad() -> Tuple:
+    # parameters for generating data and models
+    n_data = 2
+    C = 3
+    n_class = 3
+    image_dim = 32
+    seed = 0
+    generator = torch.Generator().manual_seed(seed)
+    # generate random data
+    X = torch.randn((n_data,C,image_dim,image_dim,), generator=generator)
+    # generate models
+    model_batchnorm_grad = ResNet9(C=C, n_class=10)
+    model_batchnorm_grad.eval()
+    model_batchnorm_no_grad = deepcopy(model_batchnorm_grad)
+    model_batchnorm_no_grad.eval()
+    # switch off gradients
+    for module in model_batchnorm_no_grad.modules():
+        if type(module) is nn.BatchNorm2d:
+            for par in module.parameters():
+                par.requires_grad = False
+    return X, model_batchnorm_grad, model_batchnorm_no_grad
 
 def test_get_gradient_projector_1d(init_data: Tuple):
     """
@@ -127,29 +154,19 @@ def test_get_pred_var():
     torch.allclose(Sigma_true, Sigma)
 
     
-def test_get_jacobian_for_switched_off_batchnorm_layers():
+def test_get_jacobian_for_switched_off_batchnorm_layers(
+    resnet_without_batchnorm_grad: Tuple
+    ):
     # load model with BatchNorm2d layers
-    X = torch.randn(2,3,32,32)
-    model = ResNet9(C=3, n_class=10)
-    model.eval()
-    # compute jacobian before gradient int batchnorm layers
-    # is switched off
-    full_J_x = get_jacobian(model=model, X=X)
-    # switch off Batchnorm2d layers
-    for module in model.modules():
-        if type(module) is nn.BatchNorm2d:
-            for par in module.parameters():
-                par.requires_grad = False
-    # recompute jacobian 
-    sub_J_X = get_jacobian(model=model, X=X)
+    X, model_batchnorm_grad, model_batchnorm_no_grad = \
+        resnet_without_batchnorm_grad
+    full_J_x = get_jacobian(model=model_batchnorm_grad, X=X)
+    sub_J_X = get_jacobian(model=model_batchnorm_no_grad, X=X)
 
     # indices for switched off gradients
-    where_requires_grad_False = torch.concat([
-        torch.ones_like(p, dtype=torch.bool).flatten()
-        if not p.requires_grad else 
-        torch.zeros_like(p, dtype=torch.bool).flatten()
-        for p in model.parameters()
-    ])
+    where_requires_grad_False = torch.logical_not(
+       where_parameters_with_grad(model_batchnorm_no_grad) 
+    )
     # check whether there really parameters with no requires_grad 
     assert torch.sum(where_requires_grad_False) > 0
 
@@ -160,3 +177,13 @@ def test_get_jacobian_for_switched_off_batchnorm_layers():
     )
     
 
+def test_where_parameters_with_grad(resnet_without_batchnorm_grad: Tuple):
+    _, model_batchnorm_grad, model_batchnorm_no_grad = \
+        resnet_without_batchnorm_grad
+    assert sum(where_parameters_with_grad(model_batchnorm_grad)) \
+        != sum(where_parameters_with_grad(model_batchnorm_no_grad))
+    assert sum(where_parameters_with_grad(model_batchnorm_grad)) \
+        == number_of_parameters_with_grad(model_batchnorm_grad)
+    assert sum(where_parameters_with_grad(model_batchnorm_no_grad)) \
+        == number_of_parameters_with_grad(model_batchnorm_no_grad)
+     

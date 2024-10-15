@@ -18,7 +18,10 @@ from laplace import FullLaplace, KronLaplace
 from tqdm import tqdm
 
 from utils import estimate_regression_likelihood_sigma
-from projector.projector1d import create_jacobian_data_iterator
+from projector.projector1d import (
+    create_jacobian_data_iterator,
+    number_of_parameters_with_grad
+)
 from projector.fisher import get_V_iterator
 from data.dataset import get_dataset
 from pred_model.model import get_model
@@ -219,7 +222,7 @@ def run_main(cfg: DictConfig) -> None:
 
     # Compute s_max and s_List
     if s_max is None:
-        number_of_parameters = sum([p.numel() for p in model.parameters()])
+        number_of_parameters = number_of_parameters_with_grad(model)
         test_out = model(next(iter(fit_dataloader))[0].to(device))
         if len(test_out.shape) == 1:
             n_out = 1

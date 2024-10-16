@@ -257,12 +257,8 @@ def compute_Sigma_P(P: torch.Tensor, IPsi: InvPsi,
         return create_Sigma_P_iterator
 
 
-def IPsi_predictive(X: torch.Tensor, model: nn.Module, IPsi: InvPsi,
-                   P: Optional[torch.Tensor],
-                   chunk_size: Optional[int]  = None,
-                   regression_likelihood_sigma: Optional[float] = None,
-                   ) -> Tuple[torch.Tensor, torch.Tensor]:
-    """Computes predictions and covariances for all the input in X for the
+class IPsi_predictive():
+    """Computes predictions and covariances for the
     linearized model produced from `model`, `IPsi` and `P` (optional). If `P`
     is not `None` the projected model is used, otherwise the full model is used.
     A `chunk_size`
@@ -271,31 +267,56 @@ def IPsi_predictive(X: torch.Tensor, model: nn.Module, IPsi: InvPsi,
     of the likelihood is accounted for. This should only be done for regression
     problems.
     """
-    # predictions
-    model.eval()
-    predictions = model(X).detach()
-    # uncertainties
-    J_X = get_jacobian(model, X=X, is_classification=False,
-                    chunk_size=chunk_size).detach()
-    if P is not None:
-        inv_P_T_inv_Psi_P = torch.linalg.inv(IPsi.quadratic_form(W=P))
-        # batch_size x target dimension x number of parameters
-        assert len(J_X.shape) == 3
-        J_X_P = torch.einsum('btp,ps->bts', J_X, P)
-        variances = torch.einsum('bts,sS,STb->btT',J_X_P,inv_P_T_inv_Psi_P,
-                                J_X_P.transpose(0,-1))
-    else:
-        variances = IPsi.Sigma_batchwise(J_X=J_X)
-    
-    if regression_likelihood_sigma is not None:
-        assert len(variances.shape) == 3 # batch x target x target
-        variances += regression_likelihood_sigma**2 \
-            * torch.eye(variances.size(-1)).to(variances.device)
+    def __init__(
+        self,
+        model: nn.Module,
+        IPsi: InvPsi,
+        P: Optional[torch.Tensor],
+        chunk_size: Optional[int]  = None,
+        regression_likelihood_sigma: Optional[float] = None,
+    ):
+        # predictions
+        self.model = model.eval()
+        self.IPsi = IPsi
+        self.P = P
+        self.chunk_size = chunk_size
+        self.regression_likelihood_sigma = regression_likelihood_sigma
+        if self.P is not None:
+            self._inv_P_T_inv_Psi_P = torch.linalg.inv(IPsi.quadratic_form(W=P))
 
-
+    def __call__(
+            self,
+            X: torch.Tensor,
+            s: Optional[int] = None,
+        ) -> Tuple[torch.Tensor, torch.Tensor]:
+        predictions = self.model(X).detach()
+        # uncertainties
+        J_X = get_jacobian(
+            self.model,
+            X=X,
+            is_classification=False,
+            chunk_size=self.chunk_size
+        ).detach()
+        if self.P is not None:
+            assert self._inv_P_T_inv_Psi_P is not None
+            # batch_size x target dimension x number of parameters
+            assert len(J_X.shape) == 3
+            J_X_P = torch.einsum('btp,ps->bts', J_X, self.P[:, :s])
+            variances = torch.einsum(
+                'bts,sS,STb->btT',
+                J_X_P,
+                self._inv_P_T_inv_Psi_P[:s, :s],
+                J_X_P.transpose(0, -1)
+            )
+        else:
+            variances = self.IPsi.Sigma_batchwise(J_X=J_X)
         
-    
-    return predictions, variances
+        if self.regression_likelihood_sigma is not None:
+            assert len(variances.shape) == 3 # batch x target x target
+            variances += self.regression_likelihood_sigma**2 \
+                * torch.eye(variances.size(-1)).to(variances.device)
+
+        return predictions, variances
     
 
 

@@ -436,7 +436,9 @@ def test_glm_predictive(
     P = compute_optimal_P(
         IPsi=IPsi, J_X=flatten_batch_and_target_dimension(J_X_train), U=U, s=s
     )
-    predictions, variances = IPsi_predictive(X=X_test, model=model, IPsi=IPsi, P=P)
+    predictions, variances = IPsi_predictive(model=model, IPsi=IPsi, P=P)(
+        X=X_test
+    )
     assert len(predictions) == len(variances)
     J_X_test = get_jacobian(model=model, X=X_test, is_classification=False)
     theoretical_variances = []

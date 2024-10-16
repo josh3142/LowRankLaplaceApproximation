@@ -5,7 +5,7 @@ with `update_performance_metrics`.
 
 import os
 import math
-from typing import Optional, Union
+from typing import Optional, Union, Callable, Tuple
 
 import hydra
 from omegaconf import DictConfig
@@ -33,7 +33,6 @@ from linearized_model.low_rank_laplace import (
     compute_optimal_P,
     compute_Sigma_P,
     IPsi_predictive,
-    InvPsi,
 )
 from linearized_model.subset import subset_indices
 from linearized_model.approximation_metrics import (
@@ -251,8 +250,6 @@ def run_main(cfg: DictConfig) -> None:
             state_dict = torch.load(f, map_location=device)
 
         model.load_state_dict(state_dict=state_dict)
-
-        
         # for regression problems estimate the sigma of the likelihood
         if not is_classification:
             print('Estimating sigma of likelihood')
@@ -265,8 +262,6 @@ def run_main(cfg: DictConfig) -> None:
                 = regression_likelihood_sigma
         else:
             regression_likelihood_sigma = None
-            
-
         # collecting posterior covariances for low rank methods
         print(">>>> Collecting posterior covariances")
         results[seed]["low_rank"] = {}
@@ -410,31 +405,13 @@ def run_main(cfg: DictConfig) -> None:
 
         def update_NLL_metrics(
             metrics_dict: dict,
-            s: Optional[int],
-            P: Optional[torch.Tensor],
-            IPsi: InvPsi,
+            predictive: Callable[
+                [torch.Tensor,],
+                Tuple[torch.Tensor, torch.Tensor]
+            ],
             nll_dataloader=nll_dataloader,
-            model=model,
-            chunk_size=chunk_size,
             is_classification=is_classification,
         ):
-            # log-likelihood for projected model
-            if s is not None and P is not None:
-                # take projected model
-                Ps = P[:, :s]
-            else:
-                # take full model
-                Ps = None
-
-            def predictive(X):
-                return IPsi_predictive(
-                    X=X,
-                    model=model,
-                    IPsi=IPsi,
-                    P=Ps,
-                    chunk_size=chunk_size,
-                    regression_likelihood_sigma=regression_likelihood_sigma,
-                )
 
             update_performance_metrics(
                 metrics_dict=metrics_dict,
@@ -477,6 +454,13 @@ def run_main(cfg: DictConfig) -> None:
                 J_X=create_test_proj_jac_it,
                 s_iterable=s_list,
             )
+            predictive = IPsi_predictive(
+                model=model,
+                IPsi=IPsi_ref,
+                P=P,
+                chunk_size=chunk_size,
+                regression_likelihood_sigma=regression_likelihood_sigma,
+            )
             assert callable(create_Sigma_P_s_it)
             for s, Sigma_P_s in zip(s_list, create_Sigma_P_s_it()):
                 update_Sigma_metrics(
@@ -486,9 +470,7 @@ def run_main(cfg: DictConfig) -> None:
                 )
                 update_NLL_metrics(
                     metrics_dict=results[seed]["baseline"]["metrics"],
-                    s=s,
-                    P=P,
-                    IPsi=IPsi_ref,
+                    predictive=lambda X: predictive(X=X, s=s)
                 )
 
         else:
@@ -528,9 +510,17 @@ def run_main(cfg: DictConfig) -> None:
                 J_X=create_test_proj_jac_it,
                 s_iterable=s_list,
             )
+            predictive = IPsi_predictive(
+                model=model,
+                IPsi=IPsi,
+                P=P,
+                chunk_size=chunk_size,
+                regression_likelihood_sigma=regression_likelihood_sigma,
+            )
             assert callable(create_Sigma_P_s_it)
             for s, Sigma_P_s in tqdm(
-                zip(s_list, create_Sigma_P_s_it()), desc="Running through s"
+                zip(s_list, create_Sigma_P_s_it()),
+                desc="Running through s"
             ):
                 update_Sigma_metrics(
                     metrics_dict=results[seed]["low_rank"][method]["metrics"],
@@ -539,9 +529,7 @@ def run_main(cfg: DictConfig) -> None:
                 )
                 update_NLL_metrics(
                     metrics_dict=results[seed]["low_rank"][method]["metrics"],
-                    s=s,
-                    P=P,
-                    IPsi=IPsi_ref,
+                    predictive=lambda X: predictive(X=X, s=s),
                 )
             if store_method_sigma:
                 print(f"Compute full Sigma on test data for method {method}")
@@ -558,20 +546,25 @@ def run_main(cfg: DictConfig) -> None:
                     Sigma_approx=Sigma_test_method,
                     Sigma_ref=Sigma_ref,
                 )
+                full_predictive = IPsi_predictive(
+                    model=model,
+                    IPsi=IPsi,
+                    P=None,
+                    chunk_size=chunk_size,
+                    regression_likelihood_sigma=regression_likelihood_sigma,
+                )
                 update_NLL_metrics(
                     metrics_dict=results[seed]["low_rank"][method]["full_cov"][
                         "metrics"
                     ],
-                    s=None,
-                    P=None,
-                    IPsi=IPsi,
+                    predictive=full_predictive,
                 )
             else:
                 results[seed]["low_rank"][method]["full_cov"]["Sigma_test"] = (
                     None
                 )
 
-        # collect metrics for subet methods
+        # collect metrics for subset methods
         print(">>>>>> Evaluating subset methods\n............")
         for method in results[seed]["subset"].keys():
             print(f"> Computing results for {method}")
@@ -586,6 +579,13 @@ def run_main(cfg: DictConfig) -> None:
                 J_X=create_test_proj_jac_it,
                 s_iterable=s_list,
             )
+            predictive = IPsi_predictive(
+                model=model,
+                IPsi=IPsi_ref,
+                P=P,
+                regression_likelihood_sigma=regression_likelihood_sigma,
+                chunk_size=chunk_size,
+            )
             assert callable(create_Sigma_P_s_it)
             for s, Sigma_P_s in zip(s_list, create_Sigma_P_s_it()):
                 update_Sigma_metrics(
@@ -595,9 +595,7 @@ def run_main(cfg: DictConfig) -> None:
                 )
                 update_NLL_metrics(
                     metrics_dict=results[seed]["subset"][method]["metrics"],
-                    s=s,
-                    P=P,
-                    IPsi=IPsi_ref,
+                    predictive=lambda X: predictive(X=X, s=s),
                 )
 
         # save results after each seed computation

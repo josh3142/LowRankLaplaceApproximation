@@ -257,19 +257,20 @@ class DatasetGenerator(Dataset):
             self.Y         = Y
         else:
             self.Y = Y[...,None] # add target dimension
-        self.Y = self.change_dtype(self.Y, dtype)
+        if not is_classification:
+            self.Y = self.change_dtype(self.Y, dtype)
         self.transform = transform
 
+    @staticmethod
     def change_dtype(
-            self, 
             data: Union[Tensor, np.ndarray], 
             dtype: Literal["float32", "float64"]
         ) -> Union[Tensor, np.ndarray]:
         if isinstance(data, np.ndarray):
-            datatype = np.float64 if dtype=="float64" else np.float32
+            datatype = np.float64 if dtype == "float64" else np.float32
             return data.astype(datatype)
         elif isinstance(data, Tensor):
-            datatype = torch.float64 if dtype=="float64" else torch.float32
+            datatype = torch.float64 if dtype == "float64" else torch.float32
             return data.to(datatype)
         else:
             raise TypeError("Input should be either NumPy array or Pytorch Tensor.")
@@ -301,17 +302,27 @@ class SetType:
 def get_mnist_corrupted(path: str, name: str, train: bool, dtype: str) -> Dataset:
     def transform() -> Callable:
         return Compose([
-            ToTensor(), 
-            Normalize((0.5, ), (0.5,)), 
-            SetType(dtype)]
-        )    
-    
+            ToTensor(),
+            Normalize((0.5, ), (0.5,)),
+            SetType(dtype),
+        ])
+
     name, corruption = name.split("-")
     file_path = os.path.join(path, name, corruption)
     if train:
         X = np.load(os.path.join(file_path, "train_images.npy"))
-        Y = np.load(os.path.join(file_path, "train_labels.npy"))
+        Y = np.load(
+            os.path.join(file_path, "train_labels.npy")
+            ).astype(np.int64)
     else:
         X = np.load(os.path.join(file_path, "test_images.npy"))
-        Y = np.load(os.path.join(file_path, "test_labels.npy"))
-    return DatasetGenerator(X, Y, transform=transform(), dtype=dtype) 
+        Y = np.load(
+            os.path.join(file_path, "test_labels.npy")
+            ).astype(np.int64)
+    return DatasetGenerator(
+        X,
+        Y,
+        transform=transform(),
+        dtype=dtype,
+        is_classification=True,
+    )

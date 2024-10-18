@@ -1,5 +1,5 @@
 name: mnist
-name_corrupt: mnist_c-motion_blur
+name_corrupt: mnist_c-rotate
 # other corruption options are
 # mnist_c-brightness, mnist_c-canny_edges, mnist_c-dotted_line, mnist_c-fog
 # mnist_c-glass_blur, mnist_c-impulse_noise, mnist_c-motion_blur, mnist_c-rotate,

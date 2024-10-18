@@ -234,10 +234,17 @@ def compute_optimal_P(IPsi: InvPsi, J_X: Union[torch.Tensor, Callable[[], Iterab
             P = P @ Q
         return P
     
+
 def compute_Sigma_P(P: torch.Tensor, IPsi: InvPsi,
                     J_X: Union[torch.Tensor, Callable[[], Iterable]],
                     s_iterable: Optional[Iterable[int]] = None,
+                    # eps: float = 1e-10,
                     ) -> Union[torch.Tensor, Callable[[], Iterable]]:
+    inv = torch.linalg.inv
+    # if eps > 0:
+    #     s_max = s_iterable[-1]
+    #     P = torch.concat((P, torch.zeros((P.size(0), s_max - P.size(1))).to(P.device)), dim=-1) \
+    #         + eps * torch.randn(P.size(0), s_max).to(P.device)
     P_T_inv_Psi_P = IPsi.quadratic_form(W=P)
     if type(J_X) is torch.Tensor:
         if len(J_X.shape) > 2:
@@ -247,13 +254,13 @@ def compute_Sigma_P(P: torch.Tensor, IPsi: InvPsi,
         J_X_times_P = iterator_wise_matmul(J_X, P, transpose_a=False,
                                            iteration_dim=0)
     if s_iterable is None:
-        return J_X_times_P @ torch.linalg.inv(P_T_inv_Psi_P) @ J_X_times_P.T
+        return J_X_times_P @ inv(P_T_inv_Psi_P) @ J_X_times_P.T
     else:
         def create_Sigma_P_iterator():
             for s in s_iterable:
                 J_X_times_P_s = J_X_times_P[:,:s]
                 P_s_T_inv_Psi_P_s_T = P_T_inv_Psi_P[:s,:s]
-                yield J_X_times_P_s @ torch.linalg.inv(P_s_T_inv_Psi_P_s_T) @ J_X_times_P_s.T
+                yield J_X_times_P_s @ inv(P_s_T_inv_Psi_P_s_T) @ J_X_times_P_s.T
         return create_Sigma_P_iterator
 
 

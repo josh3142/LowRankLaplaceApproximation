@@ -20,7 +20,7 @@ from tqdm import tqdm
 from utils import estimate_regression_likelihood_sigma
 from projector.projector1d import (
     create_jacobian_data_iterator,
-    number_of_parameters_with_grad
+    number_of_parameters_with_grad,
 )
 from projector.fisher import get_V_iterator
 from data.dataset import get_dataset
@@ -75,6 +75,7 @@ def run_main(cfg: DictConfig) -> None:
         likelihood = "regression"
 
     # load optional arguments
+    corrupt_data = getattr(cfg, "corrupt_data", False)
     prior_precision = getattr(cfg, "prior_precision", default_prior_precision)
     stored_hessians = getattr(cfg, "stored_hessians", [])
     laplace_methods = getattr(cfg, "laplace_methods", [])
@@ -95,13 +96,7 @@ def run_main(cfg: DictConfig) -> None:
     v_n_batches = getattr(cfg, "v_n_batches", None)
     chunk_size = getattr(cfg, "chunk_size", None)
     postfix = getattr(cfg, "postfix", "")
-    seed_list = getattr(
-        cfg,
-        "seed_list",
-        [
-            None,
-        ],
-    )
+    seed_list = getattr( cfg, "seed_list", [None, ],)
     reference_method = getattr(cfg, "reference_method", None)
 
     s_max = getattr(cfg, "s_max", None)
@@ -129,9 +124,15 @@ def run_main(cfg: DictConfig) -> None:
     get_model_kwargs["name"] = model_name
     get_model_kwargs |= dict(cfg.data.param)
     results["get_model_kwargs"] = get_model_kwargs
-    get_dataset_kwargs = dict(
-        name=dataset_name, path=cfg.data.path, dtype=dtype_str
-    )
+    if not corrupt_data:
+        get_dataset_kwargs = dict(
+            name=dataset_name, path=cfg.data.path, dtype=dtype_str
+        )
+    else:
+        print(f'Using corrupt_data {cfg.data.name_corrupt}')
+        get_dataset_kwargs = dict(
+            name=cfg.data.name_corrupt, path=cfg.data.path, dtype=dtype_str
+        )
     results["get_dataset_kwargs"] = get_dataset_kwargs
 
     # setting up paths
@@ -231,8 +232,11 @@ def run_main(cfg: DictConfig) -> None:
             len(train_data), projector_number_of_batches * projector_batch_size
         )
         s_max = min(n_data * n_out, number_of_parameters)
-    s_step = math.ceil((s_max-s_min) / s_number)
-    s_list = np.arange(s_min, s_max, step=s_step)
+    s_step = math.ceil((s_max-s_min) / (s_number-1))
+    s_list = np.concatenate((
+        np.arange(s_min, s_max, step=s_step),
+        np.array([s_max]),
+    ))
 
     results["s_list"] = s_list
     results['seed_list'] = []
@@ -267,7 +271,9 @@ def run_main(cfg: DictConfig) -> None:
         results[seed]["low_rank"] = {}
         if reference_method == "Ihalf_it":
             V_it_dataloader = DataLoader(
-                dataset=train_data, batch_size=v_batch_size, shuffle=True
+                dataset=train_data,
+                batch_size=v_batch_size,
+                shuffle=True
             )
 
             def create_V_it():
@@ -283,7 +289,8 @@ def run_main(cfg: DictConfig) -> None:
             # which cannot be pickled
             results[seed]["low_rank"][reference_method] = {"InvPsi": None}
             IPsi_ref = HalfInvPsi(
-                V=create_V_it, prior_precision=prior_precision
+                V=create_V_it,
+                prior_precision=prior_precision
             )
         else:
             assert (
@@ -309,7 +316,8 @@ def run_main(cfg: DictConfig) -> None:
                             "file_" + hessian_file_name
                         ] = {
                             "InvPsi": HalfInvPsi(
-                                V=V, prior_precision=prior_precision
+                                V=V,
+                                prior_precision=prior_precision,
                             )
                         }
                     else:
@@ -382,10 +390,8 @@ def run_main(cfg: DictConfig) -> None:
             Sigma_approx: torch.Tensor,
             Sigma_ref: Optional[torch.Tensor],
         ):
-        
             """Summarizes the metric collection for
             computed Sigma approximation"""
-
             # trace
             update_performance_metrics(
                 metrics_dict=metrics_dict,

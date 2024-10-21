@@ -10,7 +10,7 @@ from tqdm import tqdm
 def rho(
         eigenvalues: Optional[torch.Tensor] = None,
         pred_cov: Optional[torch.Tensor] = None
-    ) -> np.ndarray:
+) -> np.ndarray:
     # assert 1D vector
     if eigenvalues is None:
         assert pred_cov is not None
@@ -21,20 +21,16 @@ def rho(
     return np.array(rho_values)
 
 
-
 def relative_error(
         Sigma_approx: torch.Tensor,
         Sigma: torch.Tensor,
         norm: Callable=torch.linalg.norm
-    ) -> float:
+) -> float:
     return (norm(Sigma_approx-Sigma)/norm(Sigma)).item()
   
 
-def trace(Sigma_approx: torch.Tensor)-> float:
+def trace(Sigma_approx: torch.Tensor) -> float:
        return torch.trace(Sigma_approx).item()
-
-
-
 
 
 def NLL(
@@ -42,8 +38,8 @@ def NLL(
         variances: torch.Tensor,
         targets: torch.Tensor,
         is_classification: bool = True,
-        sum: bool =True
-    ) -> torch.Tensor:
+        sum: bool = True
+) -> torch.Tensor:
     """Computes the log posterior predictive, known as the "log likelihood" 
     in the literature on Bayesian Deep Learning. For classification the "probit
     approximation" of the posterior predictive is used (cf. Bishop)."""
@@ -74,7 +70,30 @@ def collect_NLL(
         device: Optional[torch.device]=None,
         reduction: Literal['sum', 'mean', 'none']='mean',
         verbose: bool = True
-    ) -> torch.Tensor:
+) -> torch.Tensor:
+    """Collects the so-called "negative-log-likelihood" (NLL) on the data
+    obtained by `dataloader`. If `reduction` is `none` the nll values for each
+    datapoint are stored in a Tensor, otherwise they are summed
+    (`reduction==sum`) or averaged (`reduction=mean`).
+
+    Args:
+        predictive (Callable[[torch.Tensor], Tuple[torch.Tensor, torch.Tensor]]): 
+        Should return predictions and covariances (batched covariance matrices
+        for each input) when called upon an input obtained from `dataloader`.
+        dataloader (DataLoader): Should yield inputs and targets. 
+        is_classification (bool): Specifies whether classification of regression
+        problem is considered.
+        device (Optional[torch.device], optional): Device for computation.
+        reduction (Literal[&#39;sum&#39;, &#39;mean&#39;, &#39;none&#39;],
+        optional): Specify whether NLLs for each datapoint are kept, averaged or
+        summed.
+        verbose (bool, optional): If `True` a status bar is printed.
+
+
+    Returns:
+        torch.Tensor: NLL as collection, sum or average (depending on
+        `reduction`.)
+    """
     ll_collection = []
     if verbose:
         dataloader_with_description = tqdm(dataloader, desc='Collecting LL')
@@ -108,7 +127,7 @@ def update_performance_metrics(
         metrics_dict: dict, key: str, 
         value: Union[float, torch.Tensor],
         tensor_to_float: bool = True
-    ) -> None:
+) -> None:
     """
     Method to collect metrics. Checks whether `key` is contained in
     `metrics_dict`. If it is not, `[value,]` is stored under this key. If it is,

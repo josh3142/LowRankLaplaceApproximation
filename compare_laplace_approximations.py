@@ -3,6 +3,9 @@ use them to infer a projection operator and compare the results
 with `update_performance_metrics`.
 """
 
+import os 
+os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
+
 import os
 import math
 from typing import Optional, Union, Callable, Tuple
@@ -41,6 +44,8 @@ from linearized_model.approximation_metrics import (
     trace,
     collect_NLL,
 )
+
+from utils import make_deterministic
 
 
 # default parameters
@@ -243,6 +248,7 @@ def run_main(cfg: DictConfig) -> None:
 
     # Collect for each seed results and store them in `results[seed]`
     for seed in seed_list:
+        make_deterministic(seed)
         results[seed] = {}
         print(f"Using seed {seed}\n............")
 

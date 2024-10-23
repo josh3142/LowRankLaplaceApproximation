@@ -14,11 +14,13 @@ import hydra
 from omegaconf import DictConfig
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Dataset
 import numpy as np
 import laplace
 from laplace import FullLaplace, KronLaplace
 from tqdm import tqdm
+
+from typing import Literal
 
 from utils import estimate_regression_likelihood_sigma
 from projector.projector1d import (
@@ -29,6 +31,7 @@ from projector.fisher import get_V_iterator
 from data.dataset import get_dataset
 from pred_model.model import get_model
 from linearized_model.low_rank_laplace import (
+    InvPsi,
     FullInvPsi,
     HalfInvPsi,
     KronInvPsi,
@@ -46,6 +49,97 @@ from linearized_model.approximation_metrics import (
 )
 
 from utils import make_deterministic
+
+def get_Psi(
+        method: Literal["ggn_it", "load_file" "kron", "full"], 
+        cfg: DictConfig, 
+        model: nn.Module, 
+        data: Dataset, 
+        path: str
+    ) -> InvPsi:
+    """
+    Wrapper to get posterior `Psi`.
+
+    Args:
+        method: Method to compute the posterior. 
+            `ggn_it` computes generalized Gauss-Newton matrix as an iterator 
+            `load_file` loads a precomputed posterior
+            `kron`, `diagonal` and `full` computes `Psi` with the Laplace lib
+        cfg: Configurations file
+        model: Pytorch model
+        data: Pytorch Dataset
+        path: string to point to the file loaded by `load_file`
+    """
+    dtype = getattr(torch, cfg.dtype)
+
+    if method=="ggn_it":
+        def compute_psi_ggn_iterator(cfg, model, data):
+            dl = DataLoader(
+                dataset=data,
+                batch_size=cfg.projector.v.batch_size,
+                shuffle=True
+                )
+            def create_V_it():
+                return get_V_iterator(
+                    model=model,
+                    dl=dl,
+                    is_classification=cfg.data.is_classification,
+                    n_batches=cfg.projector.v.n_batches,
+                    chunk_size=cfg.projector.chunk_size,
+                )
+            IPsi = HalfInvPsi(
+                V=create_V_it,
+                prior_precision=cfg.projector.sigma.prior_precision
+            )
+            return IPsi
+        return compute_psi_ggn_iterator(cfg, model, data)
+    
+    elif method in ["kron", "full"]:
+        likelihood = "classification" if cfg.data.is_classification \
+            else "regression"
+        dl = DataLoader(
+            dataset=data,
+            batch_size=cfg.projector.v.batch_size,
+            shuffle=True
+            )
+        la = laplace.Laplace(
+                    model=model,
+                    hessian_structure=method,
+                    likelihood=likelihood,
+                    subset_of_weights="all",
+                    prior_precision=cfg.projector.sigma.prior_precision,
+                )
+        la.fit(dl)
+        if method=="kron":
+            assert type(la) is KronLaplace
+            return KronInvPsi(inv_Psi=la)
+
+        elif method=="full":
+            assert type(la) is FullLaplace
+            return FullInvPsi(inv_Psi=la.posterior_precision.to(dtype))
+        
+    elif method=="load_file":
+        hessian_name = cfg.projector.posterior_hessian.load.name
+        hessian_file_name = os.path.join(
+            path, cfg.projector.posterior_hessian.load.type, hessian_name
+        )
+        with open(hessian_file_name, "rb") as f:
+            H_file = torch.load(f, map_location=cfg.device_torch)
+        
+        if hessian_file_name.startswith("Ihalf"):
+            V = H_file["H"].to(dtype)
+            return  HalfInvPsi(
+                    V=V,
+                    prior_precision=cfg.projector.sigma.prior_precision,
+                )
+        else:
+            H = H_file["H"].to(dtype)
+            assert H.size(0) == H.size(1), "Hessian must be squared matrix."
+            inv_Psi = H \
+                + cfg.projector.sigma.prior_precision * torch.eye(H.size(0)).to(cfg.device_torch)
+            return FullInvPsi(inv_Psi=inv_Psi)
+    else:
+        raise NotImplementedError
 
 
 @hydra.main(config_path="config", config_name="config")
@@ -109,7 +203,8 @@ def run_main(cfg: DictConfig) -> None:
     results_path = os.path.join(
         "results", cfg.data.name, cfg.pred_model.name, f"seed{cfg.seed}"
     )
-    results_name = f"laplace_approximations{cfg.projector.name_postfix}.pt"
+    projector_path = os.path.join(results_path, "projector")
+    results_name = f"comparison_laplace_approximations{cfg.projector.name_postfix}.pt"
     results_filename = os.path.join(results_path, results_name)
     print(f"Using folder {results_path}")
 
@@ -119,28 +214,6 @@ def run_main(cfg: DictConfig) -> None:
         else:
             return os.path.join(results_path, "ckpt", ckpt_name)
 
-    def projector_file(seed: Union[None, int], projector_name: str) -> str:
-        # take first letters of filename as projector type
-        if projector_name[0] == "H":
-            projector_type = "H"
-        else:
-            assert projector_name[0] == "I"
-            if projector_name.startswith("Ihalf"):
-                projector_type = "Ihalf"
-            else:
-                projector_type = "I"
-        if seed is not None:
-            return os.path.join(
-                results_path,
-                f"seed{seed}",
-                "projector",
-                projector_type,
-                projector_name,
-            )
-        else:
-            return os.path.join(
-                results_path, "projector", projector_type, projector_name
-            )
 
     # load data
     train_data = get_dataset(**get_dataset_kwargs, train=True)
@@ -239,28 +312,8 @@ def run_main(cfg: DictConfig) -> None:
     print(">>>> Collecting posterior covariances")
     results["low_rank"] = {}
     if reference_method == "Ihalf_it":
-        V_it_dataloader = DataLoader(
-            dataset=train_data,
-            batch_size=cfg.projector.v.batch_size,
-            shuffle=True
-        )
-
-        def create_V_it():
-            return get_V_iterator(
-                model=model,
-                dl=V_it_dataloader,
-                is_classification=cfg.data.is_classification,
-                n_batches=cfg.projector.v.n_batches,
-                chunk_size=cfg.projector.chunk_size,
-            )
-
-        # don't store InvPsi in results as it contains callables
-        # which cannot be pickled
         results["low_rank"][reference_method] = {"InvPsi": None}
-        IPsi_ref = HalfInvPsi(
-            V=create_V_it,
-            prior_precision=cfg.projector.prior_precision
-        )
+        IPsi_ref = get_Psi(cfg.projector.sigma.method.psi, cfg, model, train_data, path=projector_path)
     else:
         assert (
             reference_method.startswith("file")
@@ -269,68 +322,16 @@ def run_main(cfg: DictConfig) -> None:
 
     for method_name in laplace_methods:
         if method_name == "file":
-            for hessian_name in stored_hessians:
-                # load Hessian
-                hessian_file_name = projector_file(
-                    seed=None, projector_name=hessian_name
-                )
-                print(f"Loading Hessian from file {hessian_file_name}")
-
-                with open(hessian_file_name, "rb") as f:
-                    H_file = torch.load(f, map_location=cfg.device_torch)
-
-                if hessian_file_name.startswith("Ihalf"):
-                    V = H_file["H"].to(dtype)
-                    results["low_rank"][
-                        "file_" + hessian_file_name
-                    ] = {
-                        "InvPsi": HalfInvPsi(
-                            V=V,
-                            prior_precision=cfg.projector.prior_precision,
-                        )
-                    }
-                else:
-                    H = H_file["H"].to(dtype)
-                    # check if really square matrix
-                    assert H.size(0) == H.size(1)
-                    # construct inverse posterior variance
-                    inv_Psi = H \
-                        + cfg.projector.prior_precision * torch.eye(H.size(0)).to(cfg.device_torch)
-                    results["low_rank"]["file_" + hessian_name] = {
-                        "InvPsi": FullInvPsi(inv_Psi=inv_Psi)
-                    }
+            inv_Psi = get_Psi("load_file", cfg, model, train_data, path=projector_path)
+            results["low_rank"]["file_" + cfg.projector.posterior_hessian.load.name] = {
+                "InvPsi": inv_Psi
+            }
         else:
-            print(f"Computing {method_name}")
-            if method_name in ["ggn"]:
-                la = laplace.Laplace(
-                    model=model,
-                    hessian_structure="full",
-                    likelihood=likelihood,
-                    subset_of_weights="all",
-                    prior_precision=cfg.projector.prior_precision,
-                )
-                la.fit(fit_dataloader)
-                assert type(la) is FullLaplace
-                results["low_rank"][method_name] = {
-                    "InvPsi": FullInvPsi(
-                        inv_Psi=la.posterior_precision.to(dtype)
-                    )
-                }
+            if method_name in ["full"]:
+                inv_Psi = get_Psi("full", cfg, model, train_data, path=projector_path)
             elif method_name in ["kron"]:
-                la = laplace.Laplace(
-                    model=model,
-                    hessian_structure="kron",
-                    likelihood=likelihood,
-                    subset_of_weights="all",
-                    prior_precision=cfg.projector.prior_precision,
-                )
-                la.fit(fit_dataloader)
-                assert type(la) is KronLaplace
-                results["low_rank"][method_name] = {
-                    "InvPsi": KronInvPsi(inv_Psi=la)
-                }
-            else:
-                raise NotImplementedError
+                 inv_Psi = get_Psi("kron", cfg, model, train_data, path=projector_path)
+            results["low_rank"][method_name] = {"InvPsi": inv_Psi}
 
     # Collect indices for subset methods
     print(">>>>> Collecting subset methods")
@@ -450,7 +451,7 @@ def run_main(cfg: DictConfig) -> None:
 
     else:
         Sigma_ref = None
-        results["baseline"]["metrics"] = None
+        # results["baseline"]["metrics"] = None
     results["baseline"]["Sigma_test"] = Sigma_ref
 
     # collect metrics for low_rank methods

@@ -17,7 +17,6 @@ v:
 fit:
     batch_size: 100
 
-
 # `s` is the dimension of the subspace.
 s:
     n: 10 # number of values linearly
@@ -26,6 +25,28 @@ s:
     max: null # null takes maximum size of the projection matrix. It is the
     # minimum of number_of_parameters and number_of_data_points * n_class
 
-prior_precision: 1.0
+# computation of the predictive covariance Sigma_P = J P (P^T Psi^-1 P)^-1 P^T J
+sigma:
+    # Note even though method.p and method.psi are both used to compute the 
+    # posterior psi. They are used in different context. The first is used to 
+    # find the projector P and the second to construct the posterior Psi in 
+    # Sigma_P
+    method:
+    # method.p defines the computation of the posterior to construct the 
+    # projector P. diagonal, magnitude, swag, kron are approximations computed 
+    # by the Laplace library. ggn uses the full generalized Gauss-Newton matrix
+    # to compute P and load_file loads a posterior from a file
+    # method.psi defines the computation of Psi in Sigma_P. 
+        p: kron # diagonal, magnitude, swag, kron, ggn_it, full, load_file
+        psi: ggn_it # ggn_it, kron, full, load_file
+    prior_precision: 1.0
+
+# if the posterior is loaded
+posterior_hessian: 
+    load:
+        type: I
+        name: "I1279.pt"
+
+
 
 layers_to_ignore: [nn.BatchNorm2d]

@@ -48,68 +48,34 @@ from linearized_model.approximation_metrics import (
 from utils import make_deterministic
 
 
-# default parameters
-default_batch_size = 100
-default_number_of_batches = 10
-default_s_min = 10
-default_s_number = 10
-default_prior_precision = 1.0
-layers_to_ignore = [nn.BatchNorm2d]
-
-
 @hydra.main(config_path="config", config_name="config")
 def run_main(cfg: DictConfig) -> None:
     # store all results in this dictionary
-    results = {}
-    # store configuration dict
-    results["cfg"] = cfg
+    results = {"cfg": cfg}
 
     # load non-optional arguments
-    dataset_name = cfg.data.name
     dtype_str = cfg.dtype
     dtype = getattr(torch, dtype_str)
-    device = torch.device(cfg.device_torch)
     torch.set_default_dtype(dtype)
-    print(f"Considering {dataset_name}")
-    model_name = cfg.pred_model.name
+    print(f"Considering {cfg.data.name}")
     get_model_kwargs = dict(cfg.pred_model.param)
-    ckpt_name = cfg.data.model.ckpt
-    if is_classification := cfg.data.is_classification:
-        likelihood = "classification"
-    else:
-        likelihood = "regression"
+    likelihood = "classification" if cfg.data.is_classification else "regression"
 
     # load optional arguments
     corrupt_data = getattr(cfg, "corrupt_data", False)
-    prior_precision = getattr(cfg, "prior_precision", default_prior_precision)
     stored_hessians = getattr(cfg, "stored_hessians", [])
     laplace_methods = getattr(cfg, "laplace_methods", [])
     if len(stored_hessians) > 0:
         laplace_methods += ["file"]
     subset_methods = getattr(cfg, "subset_methods", [])
-    standard_batch_size = getattr(
-        cfg, "standard_batch_size", default_batch_size
-    )
-    fit_batch_size = getattr(cfg, "fit_batch_size", standard_batch_size)
-    projector_batch_size = getattr(
-        cfg, "projector_batch_size", standard_batch_size
-    )
-    v_batch_size = getattr(cfg, "v_batch_size", standard_batch_size)
-    projector_number_of_batches = getattr(
-        cfg, "projector_number_of_batches", default_number_of_batches
-    )
-    v_n_batches = getattr(cfg, "v_n_batches", None)
-    chunk_size = getattr(cfg, "chunk_size", None)
-    postfix = getattr(cfg, "postfix", "")
     reference_method = getattr(cfg, "reference_method", None)
-
-    s_max = getattr(cfg, "s_max", None)
-    s_number = getattr(cfg, "s_number", default_s_number)
-    s_min = getattr(cfg, "s_min", default_s_min)
+    s_max = cfg.projector.s.max
+    s_number = cfg.projector.s.n
+    s_min = cfg.projector.s.min
 
     compute_reference_method = getattr(cfg, "compute_reference_method", True)
     store_method_sigma = getattr(cfg, "store_method_sigma", True)
-    store_p = getattr(cfg, "store_p", False)
+    store_p = getattr(cfg, "store_p", False) # should p_s be stored?
 
     # Fix reference method
     if reference_method is None:
@@ -125,12 +91,12 @@ def run_main(cfg: DictConfig) -> None:
     results["reference_method"] = reference_method
 
     # setting up kwargs for loading of model and data
-    get_model_kwargs["name"] = model_name
+    get_model_kwargs["name"] = cfg.pred_model.name
     get_model_kwargs |= dict(cfg.data.param)
     results["get_model_kwargs"] = get_model_kwargs
     if not corrupt_data:
         get_dataset_kwargs = dict(
-            name=dataset_name, path=cfg.data.path, dtype=dtype_str
+            name=cfg.data.name, path=cfg.data.path, dtype=dtype_str
         )
     else:
         print(f'Using corrupt_data {cfg.data.name_corrupt}')
@@ -141,13 +107,13 @@ def run_main(cfg: DictConfig) -> None:
 
     # setting up paths
     results_path = os.path.join(
-        "results", dataset_name, model_name, f"seed{cfg.seed}"
+        "results", cfg.data.name, cfg.pred_model.name, f"seed{cfg.seed}"
     )
-    results_name = f"comparison_laplace_approximations{postfix}.pt"
+    results_name = f"laplace_approximations{cfg.projector.name_postfix}.pt"
     results_filename = os.path.join(results_path, results_name)
     print(f"Using folder {results_path}")
 
-    def ckpt_file(seed: Union[None, int], ckpt_name=ckpt_name) -> str:
+    def ckpt_file(seed: Union[None, int], ckpt_name: str=cfg.data.model.ckpt) -> str:
         if seed is not None:
             return os.path.join(results_path, f"seed{seed}", "ckpt", ckpt_name)
         else:
@@ -182,24 +148,24 @@ def run_main(cfg: DictConfig) -> None:
     # used for fitting laplacian
     fit_dataloader = DataLoader(
         dataset=train_data,
-        batch_size=fit_batch_size,
+        batch_size=cfg.projector.fit.batch_size,
         shuffle=True
     )
 
     # used for computation of NLL metric
     nll_dataloader = DataLoader(
         dataset=test_data,
-        batch_size=projector_batch_size,
+        batch_size=cfg.projector.batch_size,
         shuffle=False
     )
 
     # load network
     model = get_model(**get_model_kwargs)
     model.eval()
-    model.to(device)
+    model.to(cfg.device_torch)
     # switch off layers to ignore
     for module in model.modules():
-        if type(module) in layers_to_ignore:
+        if type(module) in cfg.projector.layers_to_ignore:
             for par in module.parameters():
                 par.requires_grad = False
 
@@ -208,34 +174,34 @@ def run_main(cfg: DictConfig) -> None:
         return create_jacobian_data_iterator(
             dataset=train_data,
             model=model,
-            batch_size=projector_batch_size,
-            number_of_batches=projector_number_of_batches,
-            device=device,
+            batch_size=cfg.projector.batch_size,
+            number_of_batches=cfg.projector.n_batches,
+            device=cfg.device_torch,
             dtype=dtype,
-            chunk_size=chunk_size,
+            chunk_size=cfg.projector.chunk_size,
         )
 
     def create_test_proj_jac_it():
         return create_jacobian_data_iterator(
             dataset=test_data,
             model=model,
-            batch_size=projector_batch_size,
-            number_of_batches=projector_number_of_batches,
-            device=device,
+            batch_size=cfg.projector.batch_size,
+            number_of_batches=cfg.projector.n_batches,
+            device=cfg.device_torch,
             dtype=dtype,
-            chunk_size=chunk_size,
+            chunk_size=cfg.projector.chunk_size,
         )
 
     # Compute s_max and s_List
     if s_max is None:
         number_of_parameters = number_of_parameters_with_grad(model)
-        test_out = model(next(iter(fit_dataloader))[0].to(device))
+        test_out = model(next(iter(fit_dataloader))[0].to(cfg.device_torch))
         if len(test_out.shape) == 1:
             n_out = 1
         else:
             n_out = test_out.size(-1)
         n_data = min(
-            len(train_data), projector_number_of_batches * projector_batch_size
+            len(train_data), cfg.projector.n_batches * cfg.projector.batch_size
         )
         s_max = min(n_data * n_out, number_of_parameters)
     s_step = math.ceil((s_max-s_min) / (s_number-1))
@@ -250,20 +216,20 @@ def run_main(cfg: DictConfig) -> None:
     print(f"Using seed {cfg.seed}\n............")
 
     # load checkpoint for seed
-    ckpt_file_name = ckpt_file(seed=None, ckpt_name=ckpt_name)
+    ckpt_file_name = ckpt_file(seed=None, ckpt_name=cfg.data.model.ckpt)
     results["ckpt_file_name"] = ckpt_file_name
     print(f"Loading model from {ckpt_file_name}")
     with open(ckpt_file_name, "rb") as f:
-        state_dict = torch.load(f, map_location=device)
+        state_dict = torch.load(f, map_location=cfg.device_torch)
 
     model.load_state_dict(state_dict=state_dict)
     # for regression problems estimate the sigma of the likelihood
-    if not is_classification:
+    if not cfg.data.is_classification:
         print('Estimating sigma of likelihood')
         regression_likelihood_sigma = estimate_regression_likelihood_sigma(
             model=model,
             dataloader=fit_dataloader,
-            device=device,
+            device=cfg.device_torch,
         )
         results['regression_likelihood_sigma'] \
             = regression_likelihood_sigma
@@ -275,7 +241,7 @@ def run_main(cfg: DictConfig) -> None:
     if reference_method == "Ihalf_it":
         V_it_dataloader = DataLoader(
             dataset=train_data,
-            batch_size=v_batch_size,
+            batch_size=cfg.projector.v.batch_size,
             shuffle=True
         )
 
@@ -283,9 +249,9 @@ def run_main(cfg: DictConfig) -> None:
             return get_V_iterator(
                 model=model,
                 dl=V_it_dataloader,
-                is_classification=is_classification,
-                n_batches=v_n_batches,
-                chunk_size=chunk_size,
+                is_classification=cfg.data.is_classification,
+                n_batches=cfg.projector.v.n_batches,
+                chunk_size=cfg.projector.chunk_size,
             )
 
         # don't store InvPsi in results as it contains callables
@@ -293,7 +259,7 @@ def run_main(cfg: DictConfig) -> None:
         results["low_rank"][reference_method] = {"InvPsi": None}
         IPsi_ref = HalfInvPsi(
             V=create_V_it,
-            prior_precision=prior_precision
+            prior_precision=cfg.projector.prior_precision
         )
     else:
         assert (
@@ -311,7 +277,7 @@ def run_main(cfg: DictConfig) -> None:
                 print(f"Loading Hessian from file {hessian_file_name}")
 
                 with open(hessian_file_name, "rb") as f:
-                    H_file = torch.load(f, map_location=device)
+                    H_file = torch.load(f, map_location=cfg.device_torch)
 
                 if hessian_file_name.startswith("Ihalf"):
                     V = H_file["H"].to(dtype)
@@ -320,7 +286,7 @@ def run_main(cfg: DictConfig) -> None:
                     ] = {
                         "InvPsi": HalfInvPsi(
                             V=V,
-                            prior_precision=prior_precision,
+                            prior_precision=cfg.projector.prior_precision,
                         )
                     }
                 else:
@@ -329,7 +295,7 @@ def run_main(cfg: DictConfig) -> None:
                     assert H.size(0) == H.size(1)
                     # construct inverse posterior variance
                     inv_Psi = H \
-                        + prior_precision * torch.eye(H.size(0)).to(device)
+                        + cfg.projector.prior_precision * torch.eye(H.size(0)).to(cfg.device_torch)
                     results["low_rank"]["file_" + hessian_name] = {
                         "InvPsi": FullInvPsi(inv_Psi=inv_Psi)
                     }
@@ -341,7 +307,7 @@ def run_main(cfg: DictConfig) -> None:
                     hessian_structure="full",
                     likelihood=likelihood,
                     subset_of_weights="all",
-                    prior_precision=prior_precision,
+                    prior_precision=cfg.projector.prior_precision,
                 )
                 la.fit(fit_dataloader)
                 assert type(la) is FullLaplace
@@ -356,7 +322,7 @@ def run_main(cfg: DictConfig) -> None:
                     hessian_structure="kron",
                     likelihood=likelihood,
                     subset_of_weights="all",
-                    prior_precision=prior_precision,
+                    prior_precision=cfg.projector.prior_precision,
                 )
                 la.fit(fit_dataloader)
                 assert type(la) is KronLaplace
@@ -419,7 +385,7 @@ def run_main(cfg: DictConfig) -> None:
             Tuple[torch.Tensor, torch.Tensor]
         ],
         nll_dataloader=nll_dataloader,
-        is_classification=is_classification,
+        is_classification=cfg.data.is_classification,
     ):
 
         update_performance_metrics(
@@ -431,7 +397,7 @@ def run_main(cfg: DictConfig) -> None:
                 is_classification=is_classification,
                 reduction="mean",
                 verbose=False,
-                device=device,
+                device=cfg.device_torch,
             ),
         )
 
@@ -467,7 +433,7 @@ def run_main(cfg: DictConfig) -> None:
             model=model,
             IPsi=IPsi_ref,
             P=P,
-            chunk_size=chunk_size,
+            chunk_size=cfg.projector.chunk_size,
             regression_likelihood_sigma=regression_likelihood_sigma,
         )
         assert callable(create_Sigma_P_s_it)
@@ -523,7 +489,7 @@ def run_main(cfg: DictConfig) -> None:
             model=model,
             IPsi=IPsi,
             P=P,
-            chunk_size=chunk_size,
+            chunk_size=cfg.projector.chunk_size,
             regression_likelihood_sigma=regression_likelihood_sigma,
         )
         assert callable(create_Sigma_P_s_it)
@@ -559,7 +525,7 @@ def run_main(cfg: DictConfig) -> None:
                 model=model,
                 IPsi=IPsi,
                 P=None,
-                chunk_size=chunk_size,
+                chunk_size=cfg.projector.chunk_size,
                 regression_likelihood_sigma=regression_likelihood_sigma,
             )
             update_NLL_metrics(
@@ -579,7 +545,7 @@ def run_main(cfg: DictConfig) -> None:
         print(f"> Computing results for {method}")
         Ind = results["subset"][method]["Indices"]
         print("Obtaining P")
-        P = Ind.P(s_max).to(device)
+        P = Ind.P(s_max).to(cfg.device_torch)
         print("Computing performance of P on test data")
         results["subset"][method]["metrics"] = {}
         create_Sigma_P_s_it = compute_Sigma_P(
@@ -593,7 +559,7 @@ def run_main(cfg: DictConfig) -> None:
             IPsi=IPsi_ref,
             P=P,
             regression_likelihood_sigma=regression_likelihood_sigma,
-            chunk_size=chunk_size,
+            chunk_size=cfg.projector.chunk_size,
         )
         assert callable(create_Sigma_P_s_it)
         for s, Sigma_P_s in zip(s_list, create_Sigma_P_s_it()):

@@ -1,0 +1,31 @@
+name: Sigma
+# batches and chunk_size determine the storage cost to compute the projector P
+batch_size: 100 # batch size to compoute projector
+n_batches: 10 # number of iterations to compute the Jacobian.
+# The Jacobian is computed for `batch_size * n_batches` samples
+chunk_size: null # number of vjp to compute the Jacobian for computing P
+# If None, the maximum chunk size is used. 
+# If 1, then compute the jacobian row-by-row with a for-loop
+name_postfix: "" # String to be appended on file name
+
+# arguments to compute the matrix to construct Fisher information I = V.T @ V
+v:
+    n_batches: null
+    batch_size: 100
+
+# arguments used for fitting the Laplacian
+fit:
+    batch_size: 100
+
+
+# `s` is the dimension of the subspace.
+s:
+    n: 10 # number of values linearly
+    # interpolated between `s_min` and `s_max` (both values included)
+    min: 10 
+    max: null # null takes maximum size of the projection matrix. It is the
+    # minimum of number_of_parameters and number_of_data_points * n_class
+
+prior_precision: 1.0
+
+layers_to_ignore: [nn.BatchNorm2d]

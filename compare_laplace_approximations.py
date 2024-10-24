@@ -59,6 +59,7 @@ layers_to_ignore = [nn.BatchNorm2d]
 
 @hydra.main(config_path="config", config_name="config")
 def run_main(cfg: DictConfig) -> None:
+    make_deterministic(cfg.seed)
     # store all results in this dictionary
     results = {}
     # store configuration dict
@@ -182,7 +183,7 @@ def run_main(cfg: DictConfig) -> None:
     fit_dataloader = DataLoader(
         dataset=train_data,
         batch_size=fit_batch_size,
-        shuffle=True
+        shuffle=False
     )
 
     # used for computation of NLL metric
@@ -248,7 +249,6 @@ def run_main(cfg: DictConfig) -> None:
 
     # Collect for each seed results and store them in `results[seed]`
     for seed in seed_list:
-        make_deterministic(seed)
         results[seed] = {}
         print(f"Using seed {seed}\n............")
 
@@ -279,7 +279,7 @@ def run_main(cfg: DictConfig) -> None:
             V_it_dataloader = DataLoader(
                 dataset=train_data,
                 batch_size=v_batch_size,
-                shuffle=True
+                shuffle=False
             )
 
             def create_V_it():
@@ -354,6 +354,7 @@ def run_main(cfg: DictConfig) -> None:
                         )
                     }
                 elif method_name in ["kron"]:
+                    make_deterministic(cfg.seed)
                     la = laplace.Laplace(
                         model=model,
                         hessian_structure="kron",
@@ -378,6 +379,7 @@ def run_main(cfg: DictConfig) -> None:
                 subset_kwargs = dict(cfg.data.swag_kwargs)
             else:
                 subset_kwargs = {}
+            make_deterministic(cfg.seed)
             results[seed]["subset"][method] = {
                 "Indices": subset_indices(
                     model=model,

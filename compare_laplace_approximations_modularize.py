@@ -77,7 +77,7 @@ def get_Psi(
             dl = DataLoader(
                 dataset=data,
                 batch_size=cfg.projector.v.batch_size,
-                shuffle=True
+                shuffle=False
                 )
             def create_V_it():
                 return get_V_iterator(
@@ -100,8 +100,9 @@ def get_Psi(
         dl = DataLoader(
             dataset=data,
             batch_size=cfg.projector.v.batch_size,
-            shuffle=True
+            shuffle=False
             )
+        make_deterministic(cfg.seed)
         la = laplace.Laplace(
                     model=model,
                     hessian_structure=method,
@@ -190,8 +191,9 @@ def get_P(
         dl = DataLoader(
             dataset=data_Psi,
             batch_size=cfg.projector.v.batch_size,
-            shuffle=True
+            shuffle=False
             )
+        make_deterministic(cfg.seed)
         Ind = subset_indices(
                 model=model,
                 likelihood=likelihood,
@@ -208,6 +210,7 @@ def get_P(
 
 @hydra.main(config_path="config", config_name="config")
 def run_main(cfg: DictConfig) -> None:
+    make_deterministic(cfg.seed)
     # store all results in this dictionary
     results = {"cfg": cfg}
 
@@ -286,7 +289,7 @@ def run_main(cfg: DictConfig) -> None:
     fit_dataloader = DataLoader(
         dataset=train_data,
         batch_size=cfg.projector.fit.batch_size,
-        shuffle=True
+        shuffle=False
     )
 
     # used for computation of NLL metric
@@ -339,7 +342,7 @@ def run_main(cfg: DictConfig) -> None:
         cfg.projector.s_max_regularized = s_max
 
     results["s_list"] = s_list
-    make_deterministic(cfg.seed)
+    # make_deterministic(cfg.seed)
     # Collect for each seed results and store them in `results`
     print(f"Using seed {cfg.seed}\n............")
 

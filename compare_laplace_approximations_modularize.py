@@ -11,7 +11,7 @@ import math
 from typing import Optional, Union, Callable, Tuple
 
 import hydra
-from omegaconf import DictConfig
+from omegaconf import DictConfig, open_dict
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, Dataset
@@ -138,6 +138,70 @@ def get_Psi(
             inv_Psi = H \
                 + cfg.projector.sigma.prior_precision * torch.eye(H.size(0)).to(cfg.device_torch)
             return FullInvPsi(inv_Psi=inv_Psi)
+        
+    else:
+        raise NotImplementedError
+
+def get_P(        
+        method: Literal["ggn_it", "load_file" "kron", "full", "swag", "magnitude", 
+                        "diagonal", "custom"], 
+        cfg: DictConfig, 
+        model: nn.Module, 
+        data_Psi: Dataset,
+        data_J: Dataset, 
+        path: str
+    ) -> InvPsi:
+    """
+    Wrapper to get the linear operator `P`.
+
+    Args:
+        method: Method to compute `P`. 
+            `ggn_it`, `load_file`, `kron` and `full` are methods to compute the 
+            posterior to obtain the optimal linear operator
+            `swag`, `magnitude`, `diagonal` and `custom` select a certain set
+            of weights to get `P` using the Laplace lib
+        cfg: Configurations file
+        model: Pytorch model
+        data_Psi: Pytorch Dataset to compute the posterior (if needed)
+        data_Psi: Pytorch Dataset to compute the Jacobians (if needed)
+        path: string to point to the file loaded by `load_file`
+    """
+
+    if method in ["ggn_it", "load_file", "kron", "full"]:
+        def create_proj_jac_it():
+            return create_jacobian_data_iterator(
+                dataset=data_J,
+                model=model,
+                batch_size=cfg.projector.batch_size,
+                number_of_batches=cfg.projector.n_batches,
+                device=cfg.device_torch,
+                dtype=getattr(torch, cfg.dtype),
+                chunk_size=cfg.projector.chunk_size,
+            )
+        inv_Psi = get_Psi(method, cfg, model, data_Psi, path)
+        U = inv_Psi.Sigma_svd(create_proj_jac_it)[0]
+        P = compute_optimal_P(IPsi=inv_Psi, J_X=create_proj_jac_it, U=U)
+        return P
+    
+    elif method in ["diagonal", "magnitude", "swag", "custom"]:
+        subset_kwargs = dict(cfg.data.swag_kwargs)
+        likelihood = "classification" if cfg.data.is_classification \
+            else "regression"
+        dl = DataLoader(
+            dataset=data_Psi,
+            batch_size=cfg.projector.v.batch_size,
+            shuffle=True
+            )
+        Ind = subset_indices(
+                model=model,
+                likelihood=likelihood,
+                train_loader=dl,
+                method=method,
+                **subset_kwargs,
+            )
+        P = Ind.P(cfg.projector.s_max_regularized).to(cfg.device_torch)
+        return P
+
     else:
         raise NotImplementedError
 
@@ -243,17 +307,6 @@ def run_main(cfg: DictConfig) -> None:
                 par.requires_grad = False
 
     #  The following objects create upon call an iterator over the jacobian
-    def create_train_proj_jac_it():
-        return create_jacobian_data_iterator(
-            dataset=train_data,
-            model=model,
-            batch_size=cfg.projector.batch_size,
-            number_of_batches=cfg.projector.n_batches,
-            device=cfg.device_torch,
-            dtype=dtype,
-            chunk_size=cfg.projector.chunk_size,
-        )
-
     def create_test_proj_jac_it():
         return create_jacobian_data_iterator(
             dataset=test_data,
@@ -282,6 +335,8 @@ def run_main(cfg: DictConfig) -> None:
         np.arange(s_min, s_max, step=s_step),
         np.array([s_max]),
     ))
+    with open_dict(cfg):
+        cfg.projector.s_max_regularized = s_max
 
     results["s_list"] = s_list
     make_deterministic(cfg.seed)
@@ -311,7 +366,7 @@ def run_main(cfg: DictConfig) -> None:
     # collecting posterior covariances for low rank methods
     print(">>>> Collecting posterior covariances")
     results["low_rank"] = {}
-    if reference_method == "Ihalf_it":
+    if reference_method == "ggn_it":
         results["low_rank"][reference_method] = {"InvPsi": None}
         IPsi_ref = get_Psi(cfg.projector.sigma.method.psi, cfg, model, train_data, path=projector_path)
     else:
@@ -404,7 +459,7 @@ def run_main(cfg: DictConfig) -> None:
 
     # do only store reference InvPsi if it isn't
     # build using a V iterator (cf. above)
-    if reference_method != "Ihalf_it":
+    if reference_method != "ggn_it":
         IPsi_ref = results["low_rank"][reference_method]["InvPsi"]
         results["baseline"]["InvPsi"] = IPsi_ref
     else:
@@ -417,9 +472,14 @@ def run_main(cfg: DictConfig) -> None:
         Sigma_ref = compute_Sigma(
             IPsi=IPsi_ref, J_X=create_test_proj_jac_it
         )
-        U, Lamb, _ = torch.linalg.svd(Sigma_ref)
-        P = compute_optimal_P(
-            IPsi=IPsi_ref, J_X=create_test_proj_jac_it, U=U
+
+        P = get_P(
+            cfg.reference_method, 
+            cfg, 
+            model, 
+            data_Psi=train_data, 
+            data_J=test_data, 
+            path=projector_path
         )
         if store_p:
             results["baseline"]["P"] = P
@@ -465,18 +525,24 @@ def run_main(cfg: DictConfig) -> None:
             results["low_rank"][method]["full_cov"] = {"metrics": {}}
         else:
             results["low_rank"][method]["full_cov"] = None
-        if method != "Ihalf_it":
+        if method != "ggn_it":
             IPsi = results["low_rank"][method]["InvPsi"]
-        elif reference_method == "Ihalf_it":
+        elif reference_method == "ggn_it":
             IPsi = IPsi_ref
         else:
             raise NotImplementedError(
-                "Ihalf_it is only available as reference method"
+                "ggn_it is only available as reference method"
             )
-        print("Performing SVD on predictive covariance on train data")
-        U, Lamb = IPsi.Sigma_svd(create_train_proj_jac_it)
-        print("Computing P for train data")
-        P = compute_optimal_P(IPsi=IPsi, J_X=create_train_proj_jac_it, U=U)
+        
+        P = get_P(
+            method, 
+            cfg, 
+            model, 
+            data_Psi=train_data, 
+            data_J=train_data, 
+            path=projector_path
+        )
+
         if store_p:
             results["low_rank"][method]["P"] = P
         print("Computing performance of P on test data")
@@ -544,9 +610,14 @@ def run_main(cfg: DictConfig) -> None:
     print(">>>>>> Evaluating subset methods\n............")
     for method in results["subset"].keys():
         print(f"> Computing results for {method}")
-        Ind = results["subset"][method]["Indices"]
-        print("Obtaining P")
-        P = Ind.P(s_max).to(cfg.device_torch)
+        P = get_P(
+            method, 
+            cfg, 
+            model, 
+            data_Psi=train_data, 
+            data_J=train_data, 
+            path=projector_path
+        )
         print("Computing performance of P on test data")
         results["subset"][method]["metrics"] = {}
         create_Sigma_P_s_it = compute_Sigma_P(

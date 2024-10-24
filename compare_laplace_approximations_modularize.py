@@ -220,36 +220,16 @@ def run_main(cfg: DictConfig) -> None:
     torch.set_default_dtype(dtype)
     print(f"Considering {cfg.data.name}")
     get_model_kwargs = dict(cfg.pred_model.param)
-    likelihood = "classification" if cfg.data.is_classification else "regression"
 
     # load optional arguments
     corrupt_data = getattr(cfg, "corrupt_data", False)
-    stored_hessians = getattr(cfg, "stored_hessians", [])
-    laplace_methods = getattr(cfg, "laplace_methods", [])
-    if len(stored_hessians) > 0:
-        laplace_methods += ["file"]
-    subset_methods = getattr(cfg, "subset_methods", [])
     reference_method = getattr(cfg, "reference_method", None)
     s_max = cfg.projector.s.max
     s_number = cfg.projector.s.n
     s_min = cfg.projector.s.min
 
     compute_reference_method = getattr(cfg, "compute_reference_method", True)
-    store_method_sigma = getattr(cfg, "store_method_sigma", True)
     store_p = getattr(cfg, "store_p", False) # should p_s be stored?
-
-    # Fix reference method
-    if reference_method is None:
-        print("No reference method specified")
-        if len(stored_hessians) > 0:
-            print("Choosing first stored hessian")
-            reference_method = "file_" + stored_hessians[0]
-        else:
-            assert len(laplace_methods) > 0
-            print("Choosing first laplace method")
-            reference_method = laplace_methods[0]
-    print(f"Taking {reference_method} as reference method")
-    results["reference_method"] = reference_method
 
     # setting up kwargs for loading of model and data
     get_model_kwargs["name"] = cfg.pred_model.name
@@ -271,16 +251,10 @@ def run_main(cfg: DictConfig) -> None:
         "results", cfg.data.name, cfg.pred_model.name, f"seed{cfg.seed}"
     )
     projector_path = os.path.join(results_path, "projector")
-    results_name = f"comparison_laplace_approximations{cfg.projector.name_postfix}.pt"
+    results_name = f"MetricsSigmaP{cfg.projector.sigma.method.p}" + \
+        f"Psi{cfg.projector.sigma.method.psi}{cfg.projector.name_postfix}.pt"
     results_filename = os.path.join(results_path, results_name)
     print(f"Using folder {results_path}")
-
-    def ckpt_file(seed: Union[None, int], ckpt_name: str=cfg.data.model.ckpt) -> str:
-        if seed is not None:
-            return os.path.join(results_path, f"seed{seed}", "ckpt", ckpt_name)
-        else:
-            return os.path.join(results_path, "ckpt", ckpt_name)
-
 
     # load data
     train_data = get_dataset(**get_dataset_kwargs, train=True)
@@ -347,7 +321,7 @@ def run_main(cfg: DictConfig) -> None:
     print(f"Using seed {cfg.seed}\n............")
 
     # load checkpoint for seed
-    ckpt_file_name = ckpt_file(seed=None, ckpt_name=cfg.data.model.ckpt)
+    ckpt_file_name = os.path.join(results_path, "ckpt", cfg.data.model.ckpt)
     results["ckpt_file_name"] = ckpt_file_name
     print(f"Loading model from {ckpt_file_name}")
     with open(ckpt_file_name, "rb") as f:
@@ -369,46 +343,6 @@ def run_main(cfg: DictConfig) -> None:
     # collecting posterior covariances for low rank methods
     print(">>>> Collecting posterior covariances")
     results["low_rank"] = {}
-    if reference_method == "ggn_it":
-        results["low_rank"][reference_method] = {"InvPsi": None}
-        IPsi_ref = get_Psi(cfg.projector.sigma.method.psi, cfg, model, train_data, path=projector_path)
-    else:
-        assert (
-            reference_method.startswith("file")
-            or reference_method in laplace_methods
-        )
-
-    for method_name in laplace_methods:
-        if method_name == "file":
-            inv_Psi = get_Psi("load_file", cfg, model, train_data, path=projector_path)
-            results["low_rank"]["file_" + cfg.projector.posterior_hessian.load.name] = {
-                "InvPsi": inv_Psi
-            }
-        else:
-            if method_name in ["full"]:
-                inv_Psi = get_Psi("full", cfg, model, train_data, path=projector_path)
-            elif method_name in ["kron"]:
-                 inv_Psi = get_Psi("kron", cfg, model, train_data, path=projector_path)
-            results["low_rank"][method_name] = {"InvPsi": inv_Psi}
-
-    # Collect indices for subset methods
-    print(">>>>> Collecting subset methods")
-    results["subset"] = {}
-    for method in subset_methods:
-        print(f"Computing {method}")
-        if method == "swag":
-            subset_kwargs = dict(cfg.data.swag_kwargs)
-        else:
-            subset_kwargs = {}
-        results["subset"][method] = {
-            "Indices": subset_indices(
-                model=model,
-                likelihood=likelihood,
-                train_loader=fit_dataloader,
-                method=method,
-                **subset_kwargs,
-            )
-        }
 
     # collect reference and baseline metrics
     results["baseline"] = {}
@@ -463,10 +397,12 @@ def run_main(cfg: DictConfig) -> None:
     # do only store reference InvPsi if it isn't
     # build using a V iterator (cf. above)
     if reference_method != "ggn_it":
-        IPsi_ref = results["low_rank"][reference_method]["InvPsi"]
-        results["baseline"]["InvPsi"] = IPsi_ref
+        results["baseline"]["InvPsi"] = None#IPsi_ref
     else:
         results["baseline"]["InvPsi"] = None
+    results["metrics"] = {}
+    IPsi_ref = get_Psi("ggn_it", cfg, model, train_data, path=projector_path)
+    IPsi = get_Psi(cfg.projector.sigma.method.psi, cfg, model, train_data, path=projector_path)
 
     # obtain best optimal approximation using test data
     # and the reference method
@@ -475,9 +411,12 @@ def run_main(cfg: DictConfig) -> None:
         Sigma_ref = compute_Sigma(
             IPsi=IPsi_ref, J_X=create_test_proj_jac_it
         )
+        Sigma_ref = compute_Sigma(
+            IPsi=IPsi_ref, J_X=create_test_proj_jac_it
+        )
 
         P = get_P(
-            cfg.reference_method, 
+            "ggn_it", 
             cfg, 
             model, 
             data_Psi=train_data, 
@@ -495,11 +434,12 @@ def run_main(cfg: DictConfig) -> None:
         )
         predictive = IPsi_predictive(
             model=model,
-            IPsi=IPsi_ref,
+            IPsi=IPsi,
             P=P,
             chunk_size=cfg.projector.chunk_size,
             regression_likelihood_sigma=regression_likelihood_sigma,
         )
+        # TODO: store predictive
         assert callable(create_Sigma_P_s_it)
         for s, Sigma_P_s in zip(s_list, create_Sigma_P_s_it()):
             update_Sigma_metrics(
@@ -517,136 +457,49 @@ def run_main(cfg: DictConfig) -> None:
         # results["baseline"]["metrics"] = None
     results["baseline"]["Sigma_test"] = Sigma_ref
 
-    # collect metrics for low_rank methods
-    print(">>>>>> Evaluating low rank methods\n............")
-    for method in results["low_rank"].keys():
-        if not compute_reference_method and method == reference_method:
-            continue
-        print(f"> Computing results for {method}")
-        results["low_rank"][method]["metrics"] = {}
-        if store_method_sigma:
-            results["low_rank"][method]["full_cov"] = {"metrics": {}}
-        else:
-            results["low_rank"][method]["full_cov"] = None
-        if method != "ggn_it":
-            IPsi = results["low_rank"][method]["InvPsi"]
-        elif reference_method == "ggn_it":
-            IPsi = IPsi_ref
-        else:
-            raise NotImplementedError(
-                "ggn_it is only available as reference method"
-            )
-        
-        P = get_P(
-            method, 
-            cfg, 
-            model, 
-            data_Psi=train_data, 
-            data_J=train_data, 
-            path=projector_path
+    IPsi = get_Psi(
+        method=cfg.projector.sigma.method.psi,
+        cfg=cfg,
+        model=model,
+        data=train_data,
+        path=projector_path
+    )
+    P = get_P(
+        cfg.projector.sigma.method.p, 
+        cfg, 
+        model, 
+        data_Psi=train_data, 
+        data_J=train_data, 
+        path=projector_path
+    )
+    if store_p:
+        results["baseline"]["P"] = P
+    results["baseline"]["metrics"] = {}
+    create_Sigma_P_s_it = compute_Sigma_P(
+        P=P,
+        IPsi=IPsi_ref,
+        J_X=create_test_proj_jac_it,
+        s_iterable=s_list,
+    )
+    predictive = IPsi_predictive(
+        model=model,
+        IPsi=IPsi,
+        P=P,
+        chunk_size=cfg.projector.chunk_size,
+        regression_likelihood_sigma=regression_likelihood_sigma,
+    )
+    # TODO: store predictive
+    assert callable(create_Sigma_P_s_it)
+    for s, Sigma_P_s in zip(s_list, create_Sigma_P_s_it()):
+        update_Sigma_metrics(
+            metrics_dict=results["metrics"],
+            Sigma_approx=Sigma_P_s,
+            Sigma_ref=Sigma_ref,
         )
-
-        if store_p:
-            results["low_rank"][method]["P"] = P
-        print("Computing performance of P on test data")
-        create_Sigma_P_s_it = compute_Sigma_P(
-            P=P,
-            IPsi=IPsi_ref,
-            J_X=create_test_proj_jac_it,
-            s_iterable=s_list,
+        update_NLL_metrics(
+            metrics_dict=results["metrics"],
+            predictive=lambda X: predictive(X=X, s=s)
         )
-        predictive = IPsi_predictive(
-            model=model,
-            IPsi=IPsi,
-            P=P,
-            chunk_size=cfg.projector.chunk_size,
-            regression_likelihood_sigma=regression_likelihood_sigma,
-        )
-        assert callable(create_Sigma_P_s_it)
-        for s, Sigma_P_s in tqdm(
-            zip(s_list, create_Sigma_P_s_it()),
-            desc="Running through s"
-        ):
-            update_Sigma_metrics(
-                metrics_dict=results["low_rank"][method]["metrics"],
-                Sigma_approx=Sigma_P_s,
-                Sigma_ref=Sigma_ref,
-            )
-            update_NLL_metrics(
-                metrics_dict=results["low_rank"][method]["metrics"],
-                predictive=lambda X: predictive(X=X, s=s),
-            )
-        if store_method_sigma:
-            print(f"Compute full Sigma on test data for method {method}")
-            Sigma_test_method = compute_Sigma(
-                IPsi=IPsi, J_X=create_test_proj_jac_it
-            )
-            results["low_rank"][method]["full_cov"]["Sigma_test"] = (
-                Sigma_test_method
-            )
-            update_Sigma_metrics(
-                metrics_dict=results["low_rank"][method]["full_cov"][
-                    "metrics"
-                ],
-                Sigma_approx=Sigma_test_method,
-                Sigma_ref=Sigma_ref,
-            )
-            full_predictive = IPsi_predictive(
-                model=model,
-                IPsi=IPsi,
-                P=None,
-                chunk_size=cfg.projector.chunk_size,
-                regression_likelihood_sigma=regression_likelihood_sigma,
-            )
-            update_NLL_metrics(
-                metrics_dict=results["low_rank"][method]["full_cov"][
-                    "metrics"
-                ],
-                predictive=full_predictive,
-            )
-        else:
-            results["low_rank"][method]["full_cov"]["Sigma_test"] = (
-                None
-            )
-
-    # collect metrics for subset methods
-    print(">>>>>> Evaluating subset methods\n............")
-    for method in results["subset"].keys():
-        print(f"> Computing results for {method}")
-        P = get_P(
-            method, 
-            cfg, 
-            model, 
-            data_Psi=train_data, 
-            data_J=train_data, 
-            path=projector_path
-        )
-        print("Computing performance of P on test data")
-        results["subset"][method]["metrics"] = {}
-        create_Sigma_P_s_it = compute_Sigma_P(
-            P=P,
-            IPsi=IPsi_ref,
-            J_X=create_test_proj_jac_it,
-            s_iterable=s_list,
-        )
-        predictive = IPsi_predictive(
-            model=model,
-            IPsi=IPsi_ref,
-            P=P,
-            regression_likelihood_sigma=regression_likelihood_sigma,
-            chunk_size=cfg.projector.chunk_size,
-        )
-        assert callable(create_Sigma_P_s_it)
-        for s, Sigma_P_s in zip(s_list, create_Sigma_P_s_it()):
-            update_Sigma_metrics(
-                metrics_dict=results["subset"][method]["metrics"],
-                Sigma_approx=Sigma_P_s,
-                Sigma_ref=Sigma_ref,
-            )
-            update_NLL_metrics(
-                metrics_dict=results["subset"][method]["metrics"],
-                predictive=lambda X: predictive(X=X, s=s),
-            )
 
     # save results after each seed computation
     print(

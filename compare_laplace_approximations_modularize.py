@@ -8,7 +8,6 @@ os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
 
 import os
 import math
-from typing import Optional, Union, Callable, Tuple
 
 import hydra
 from omegaconf import DictConfig, open_dict
@@ -18,7 +17,6 @@ from torch.utils.data import DataLoader, Dataset
 import numpy as np
 import laplace
 from laplace import FullLaplace, KronLaplace
-from tqdm import tqdm
 
 from typing import Literal
 
@@ -41,12 +39,8 @@ from linearized_model.low_rank_laplace import (
     IPsi_predictive,
 )
 from linearized_model.subset import subset_indices
-from linearized_model.approximation_metrics import (
-    update_performance_metrics,
-    relative_error,
-    trace,
-    collect_NLL,
-)
+from linearized_model.approximation_metrics import collect_NLL
+
 
 from utils import make_deterministic
 
@@ -137,7 +131,8 @@ def get_Psi(
             H = H_file["H"].to(dtype)
             assert H.size(0) == H.size(1), "Hessian must be squared matrix."
             inv_Psi = H \
-                + cfg.projector.sigma.prior_precision * torch.eye(H.size(0)).to(cfg.device_torch)
+                + cfg.projector.sigma.prior_precision \
+                * torch.eye(H.size(0)).to(cfg.device_torch)
             return FullInvPsi(inv_Psi=inv_Psi)
         
     else:
@@ -211,38 +206,32 @@ def get_P(
 @hydra.main(config_path="config", config_name="config")
 def run_main(cfg: DictConfig) -> None:
     make_deterministic(cfg.seed)
+    torch.set_default_dtype(getattr(torch, cfg.dtype))
+
     # store all results in this dictionary
     results = {"cfg": cfg}
+    nll = {}
 
-    # load non-optional arguments
-    dtype_str = cfg.dtype
-    dtype = getattr(torch, dtype_str)
-    torch.set_default_dtype(dtype)
     print(f"Considering {cfg.data.name}")
-    get_model_kwargs = dict(cfg.pred_model.param)
+    get_model_kwargs = dict(cfg.pred_model.param) | dict(cfg.data.param)
+    get_model_kwargs["name"] = cfg.pred_model.name
+    results["get_model_kwargs"] = get_model_kwargs
 
     # load optional arguments
     corrupt_data = getattr(cfg, "corrupt_data", False)
-    reference_method = getattr(cfg, "reference_method", None)
     s_max = cfg.projector.s.max
     s_number = cfg.projector.s.n
     s_min = cfg.projector.s.min
 
-    compute_reference_method = getattr(cfg, "compute_reference_method", True)
-    store_p = getattr(cfg, "store_p", False) # should p_s be stored?
-
     # setting up kwargs for loading of model and data
-    get_model_kwargs["name"] = cfg.pred_model.name
-    get_model_kwargs |= dict(cfg.data.param)
-    results["get_model_kwargs"] = get_model_kwargs
     if not corrupt_data:
         get_dataset_kwargs = dict(
-            name=cfg.data.name, path=cfg.data.path, dtype=dtype_str
+            name=cfg.data.name, path=cfg.data.path, dtype=cfg.dtype
         )
     else:
         print(f'Using corrupt_data {cfg.data.name_corrupt}')
         get_dataset_kwargs = dict(
-            name=cfg.data.name_corrupt, path=cfg.data.path, dtype=dtype_str
+            name=cfg.data.name_corrupt, path=cfg.data.path, dtype=cfg.dtype
         )
     results["get_dataset_kwargs"] = get_dataset_kwargs
 
@@ -251,9 +240,12 @@ def run_main(cfg: DictConfig) -> None:
         "results", cfg.data.name, cfg.pred_model.name, f"seed{cfg.seed}"
     )
     projector_path = os.path.join(results_path, "projector")
-    results_name = f"MetricsSigmaP{cfg.projector.sigma.method.p}" + \
+    results_name = f"SigmaP{cfg.projector.sigma.method.p}" + \
+        f"Psi{cfg.projector.sigma.method.psi}{cfg.projector.name_postfix}.pt"
+    nll_name = f"nll{cfg.projector.sigma.method.p}" + \
         f"Psi{cfg.projector.sigma.method.psi}{cfg.projector.name_postfix}.pt"
     results_filename = os.path.join(results_path, results_name)
+    nll_filename = os.path.join(results_path, nll_name)
     print(f"Using folder {results_path}")
 
     # load data
@@ -265,7 +257,6 @@ def run_main(cfg: DictConfig) -> None:
         batch_size=cfg.projector.fit.batch_size,
         shuffle=False
     )
-
     # used for computation of NLL metric
     nll_dataloader = DataLoader(
         dataset=test_data,
@@ -284,14 +275,14 @@ def run_main(cfg: DictConfig) -> None:
                 par.requires_grad = False
 
     #  The following objects create upon call an iterator over the jacobian
-    def create_test_proj_jac_it():
+    def create_proj_jac_it():
         return create_jacobian_data_iterator(
             dataset=test_data,
             model=model,
             batch_size=cfg.projector.batch_size,
             number_of_batches=cfg.projector.n_batches,
             device=cfg.device_torch,
-            dtype=dtype,
+            dtype=getattr(torch, cfg.dtype),
             chunk_size=cfg.projector.chunk_size,
         )
 
@@ -316,14 +307,10 @@ def run_main(cfg: DictConfig) -> None:
         cfg.projector.s_max_regularized = s_max
 
     results["s_list"] = s_list
-    # make_deterministic(cfg.seed)
-    # Collect for each seed results and store them in `results`
-    print(f"Using seed {cfg.seed}\n............")
 
-    # load checkpoint for seed
+    # load checkpoint
     ckpt_file_name = os.path.join(results_path, "ckpt", cfg.data.model.ckpt)
     results["ckpt_file_name"] = ckpt_file_name
-    print(f"Loading model from {ckpt_file_name}")
     with open(ckpt_file_name, "rb") as f:
         state_dict = torch.load(f, map_location=cfg.device_torch)
 
@@ -340,123 +327,9 @@ def run_main(cfg: DictConfig) -> None:
             = regression_likelihood_sigma
     else:
         regression_likelihood_sigma = None
-    # collecting posterior covariances for low rank methods
-    print(">>>> Collecting posterior covariances")
-    results["low_rank"] = {}
 
-    # collect reference and baseline metrics
-    results["baseline"] = {}
-
-    def update_Sigma_metrics(
-        metrics_dict: dict,
-        Sigma_approx: torch.Tensor,
-        Sigma_ref: Optional[torch.Tensor],
-    ):
-        """Summarizes the metric collection for
-        computed Sigma approximation"""
-        # trace
-        update_performance_metrics(
-            metrics_dict=metrics_dict,
-            key="trace",
-            value=trace(Sigma_approx=Sigma_approx),
-        )
-
-        # relative error
-        if Sigma_ref is not None:
-            update_performance_metrics(
-                metrics_dict=metrics_dict,
-                key="rel_error",
-                value=relative_error(
-                    Sigma_approx=Sigma_approx, Sigma=Sigma_ref
-                ),
-            )
-
-    def update_NLL_metrics(
-        metrics_dict: dict,
-        predictive: Callable[
-            [torch.Tensor,],
-            Tuple[torch.Tensor, torch.Tensor]
-        ],
-        nll_dataloader=nll_dataloader,
-        is_classification=cfg.data.is_classification,
-    ):
-
-        update_performance_metrics(
-            metrics_dict=metrics_dict,
-            key="NLL",
-            value=collect_NLL(
-                predictive=predictive,
-                dataloader=nll_dataloader,
-                is_classification=is_classification,
-                reduction="mean",
-                verbose=False,
-                device=cfg.device_torch,
-            ),
-        )
-
-    # do only store reference InvPsi if it isn't
-    # build using a V iterator (cf. above)
-    if reference_method != "ggn_it":
-        results["baseline"]["InvPsi"] = None#IPsi_ref
-    else:
-        results["baseline"]["InvPsi"] = None
-    results["metrics"] = {}
-    IPsi_ref = get_Psi("ggn_it", cfg, model, train_data, path=projector_path)
-    IPsi = get_Psi(cfg.projector.sigma.method.psi, cfg, model, train_data, path=projector_path)
-
-    # obtain best optimal approximation using test data
-    # and the reference method
-    if compute_reference_method:
-        print(">>>>> Computing baseline results for reference method")
-        Sigma_ref = compute_Sigma(
-            IPsi=IPsi_ref, J_X=create_test_proj_jac_it
-        )
-        Sigma_ref = compute_Sigma(
-            IPsi=IPsi_ref, J_X=create_test_proj_jac_it
-        )
-
-        P = get_P(
-            "ggn_it", 
-            cfg, 
-            model, 
-            data_Psi=train_data, 
-            data_J=test_data, 
-            path=projector_path
-        )
-        if store_p:
-            results["baseline"]["P"] = P
-        results["baseline"]["metrics"] = {}
-        create_Sigma_P_s_it = compute_Sigma_P(
-            P=P,
-            IPsi=IPsi_ref,
-            J_X=create_test_proj_jac_it,
-            s_iterable=s_list,
-        )
-        predictive = IPsi_predictive(
-            model=model,
-            IPsi=IPsi,
-            P=P,
-            chunk_size=cfg.projector.chunk_size,
-            regression_likelihood_sigma=regression_likelihood_sigma,
-        )
-        # TODO: store predictive
-        assert callable(create_Sigma_P_s_it)
-        for s, Sigma_P_s in zip(s_list, create_Sigma_P_s_it()):
-            update_Sigma_metrics(
-                metrics_dict=results["baseline"]["metrics"],
-                Sigma_approx=Sigma_P_s,
-                Sigma_ref=Sigma_ref,
-            )
-            update_NLL_metrics(
-                metrics_dict=results["baseline"]["metrics"],
-                predictive=lambda X: predictive(X=X, s=s)
-            )
-
-    else:
-        Sigma_ref = None
-        # results["baseline"]["metrics"] = None
-    results["baseline"]["Sigma_test"] = Sigma_ref
-
+    # TODO: Check if IPsi_ggn can be deleted.
+    # IPsi_ggn = get_Psi("ggn_it", cfg, model, train_data, path=projector_path)
     IPsi = get_Psi(
         method=cfg.projector.sigma.method.psi,
         cfg=cfg,
@@ -464,23 +337,35 @@ def run_main(cfg: DictConfig) -> None:
         data=train_data,
         path=projector_path
     )
-    P = get_P(
-        cfg.projector.sigma.method.p, 
-        cfg, 
-        model, 
-        data_Psi=train_data, 
-        data_J=train_data, 
-        path=projector_path
-    )
-    if store_p:
-        results["baseline"]["P"] = P
-    results["baseline"]["metrics"] = {}
-    create_Sigma_P_s_it = compute_Sigma_P(
-        P=P,
-        IPsi=IPsi_ref,
-        J_X=create_test_proj_jac_it,
-        s_iterable=s_list,
-    )
+
+    if cfg.projector.sigma.method.p is None:
+        P = None
+        # Sigma = compute_Sigma(IPsi=IPsi_ggn, J_X=create_proj_jac_it)
+        Sigma = compute_Sigma(IPsi=IPsi, J_X=create_proj_jac_it)
+        create_Sigma_P_s_it = iter([Sigma])
+        s_list = [None]
+        print("No projector is chosen.")
+    else:
+        P = get_P(
+            cfg.projector.sigma.method.p, 
+            cfg, 
+            model, 
+            data_Psi=train_data, 
+            data_J=train_data, 
+            path=projector_path
+        )
+        create_Sigma_P_s_it = compute_Sigma_P(
+            P=P,
+            IPsi=IPsi, #IPsi_ggn,
+            J_X=create_proj_jac_it,
+            s_iterable=s_list,
+        )()
+
+    if cfg.projector.store:
+        results["P"] = P
+
+    # TODO: Should is this IPsi supposed to be different from IPsi in
+    # create_Sigma_P_s_it?
     predictive = IPsi_predictive(
         model=model,
         IPsi=IPsi,
@@ -488,25 +373,32 @@ def run_main(cfg: DictConfig) -> None:
         chunk_size=cfg.projector.chunk_size,
         regression_likelihood_sigma=regression_likelihood_sigma,
     )
-    # TODO: store predictive
-    assert callable(create_Sigma_P_s_it)
-    for s, Sigma_P_s in zip(s_list, create_Sigma_P_s_it()):
-        update_Sigma_metrics(
-            metrics_dict=results["metrics"],
-            Sigma_approx=Sigma_P_s,
-            Sigma_ref=Sigma_ref,
+    results["s_list"] = s_list
+    nll["s_list"] = s_list
+    for s, Sigma_P_s in zip(s_list, create_Sigma_P_s_it):
+        # store Sigma_P
+        name_Sigma = f"SigmaP{s}" if s is not None else "SigmaP"
+        results[name_Sigma] = Sigma_P_s
+
+        # compute nll
+        predictive_s = lambda X: predictive(X=X, s=s)
+        nll_value = collect_NLL(
+            predictive=predictive_s,
+            dataloader=nll_dataloader,
+            is_classification=cfg.data.is_classification,
+            reduction="mean",
+            verbose=False,
+            device=cfg.device_torch
         )
-        update_NLL_metrics(
-            metrics_dict=results["metrics"],
-            predictive=lambda X: predictive(X=X, s=s)
-        )
+        name_nll = f"nll{s}" if s is not None else "nll"
+        nll[name_nll] = nll_value
 
     # save results after each seed computation
-    print(
-        f"Done with seed {cfg.seed}! Saving results under {results_filename}"
-            )
+    print(f"Seed {cfg.seed}! Save results in {results_filename}")
     with open(results_filename, "wb") as f:
         torch.save(results, f)
+    with open(nll_filename, "wb") as f:
+        torch.save(nll, f)
 
 
 if __name__ == "__main__":

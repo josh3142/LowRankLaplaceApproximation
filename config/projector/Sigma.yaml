@@ -1,4 +1,5 @@
 name: Sigma
+store: False # should the operator to reduce the dimension be stored?
 # batches and chunk_size determine the storage cost to compute the projector P
 batch_size: 100 # batch size to compoute projector
 n_batches: 10 # number of iterations to compute the Jacobian.
@@ -13,7 +14,7 @@ v:
     n_batches: null
     batch_size: 100
 
-# arguments used for fitting the Laplacian
+# arguments used for fitting the posterior using the laplace library
 fit:
     batch_size: 100
 

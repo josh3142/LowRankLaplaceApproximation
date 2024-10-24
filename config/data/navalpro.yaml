@@ -1,4 +1,6 @@
 name: navalpro
+name_corrupt: navalpro
+use_corrupt: False
 is_classification: False
 # downloaded from https://www.kaggle.com/datasets/elikplim/maintenance-of-naval-propulsion-plants-data-set
 path: "../../../SharedData/AI/datasets/naval_propulsion/navalplantmaintenance.csv"

@@ -1,5 +1,6 @@
 name: california
 name_corrupt: california
+use_corrupt: False
 path: null
 is_classification: False
 model:

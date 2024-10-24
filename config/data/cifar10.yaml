@@ -1,5 +1,6 @@
 name: cifar10
 name_corrupt: cifar10_corrupt
+use_corrupt: False
 path: "../../data"
 is_classification: True
 model:

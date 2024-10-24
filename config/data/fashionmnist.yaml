@@ -1,5 +1,6 @@
 name: fashionmnist
 name_corrupt: fashionmnist
+use_corrupt: False
 path: "../../data"
 is_classification: True
 model:

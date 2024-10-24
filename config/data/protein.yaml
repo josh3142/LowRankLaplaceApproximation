@@ -1,5 +1,6 @@
 name: protein
 name_corrupt: protein
+use_corrupt: False
 path: null
 is_classification: False
 param:

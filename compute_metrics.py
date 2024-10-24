@@ -47,14 +47,14 @@ def run_main(cfg: DictConfig) -> None:
     results_path = os.path.join(
         "results", cfg.data.name, cfg.pred_model.name, f"seed{cfg.seed}"
     )
-    results_name = f"MetricsSigmaP{cfg.projector.sigma.method.p}" + \
-        f"Psi{cfg.projector.sigma.method.psi}{cfg.projector.name_postfix}.pt"
+    results_name = f"Metrics_{cfg.projector.sigma.method.p}" + \
+        f"_Psi{cfg.projector.sigma.method.psi}{cfg.projector.name_postfix}.pt"
     results_filename = os.path.join(results_path, results_name)
-    SigmaP_name =f"SigmaP{cfg.projector.sigma.method.p}" + \
-        f"Psi{cfg.projector.sigma.method.psi}{cfg.projector.name_postfix}.pt"
+    SigmaP_name =f"SigmaP_{cfg.projector.sigma.method.p}" + \
+        f"_Psi{cfg.projector.sigma.method.psi}{cfg.projector.name_postfix}.pt"
     SigmaP_filename = os.path.join(results_path, SigmaP_name)
-    Sigma_name = f"SigmaPNone" + \
-        f"Psi{cfg.projector.sigma.method.psi}{cfg.projector.name_postfix}.pt"
+    Sigma_name = f"SigmaP_None" + \
+        f"_Psi{cfg.projector.sigma.method.psi}{cfg.projector.name_postfix}.pt"
     Sigma_filename = os.path.join(results_path, Sigma_name)
 
     # load predictive ccovariance matrices

@@ -13,195 +13,79 @@ import hydra
 from omegaconf import DictConfig, open_dict
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader
 import numpy as np
-import laplace
-from laplace import FullLaplace, KronLaplace
 
-from typing import Literal
+from typing import List
 
 from utils import estimate_regression_likelihood_sigma
 from projector.projector1d import (
     create_jacobian_data_iterator,
     number_of_parameters_with_grad,
 )
-from projector.fisher import get_V_iterator
 from data.dataset import get_dataset
 from pred_model.model import get_model
+from projector.projector import get_P, get_Psi 
 from linearized_model.low_rank_laplace import (
-    InvPsi,
-    FullInvPsi,
-    HalfInvPsi,
-    KronInvPsi,
     compute_Sigma,
-    compute_optimal_P,
     compute_Sigma_P,
     IPsi_predictive,
 )
-from linearized_model.subset import subset_indices
-from linearized_model.approximation_metrics import collect_NLL
-
+from linearized_model.approximation_metrics import (
+    collect_NLL, 
+    update_performance_metrics
+)
 
 from utils import make_deterministic
 
-def get_Psi(
-        method: Literal["ggn_it", "load_file" "kron", "full"], 
-        cfg: DictConfig, 
-        model: nn.Module, 
-        data: Dataset, 
-        path: str
-    ) -> InvPsi:
-    """
-    Wrapper to get posterior `Psi`.
 
-    Args:
-        method: Method to compute the posterior. 
-            `ggn_it` computes generalized Gauss-Newton matrix as an iterator 
-            `load_file` loads a precomputed posterior
-            `kron`, `diagonal` and `full` computes `Psi` with the Laplace lib
-        cfg: Configurations file
-        model: Pytorch model
-        data: Pytorch Dataset
-        path: string to point to the file loaded by `load_file`
-    """
-    dtype = getattr(torch, cfg.dtype)
-
-    if method=="ggn_it":
-        def compute_psi_ggn_iterator(cfg, model, data):
-            dl = DataLoader(
-                dataset=data,
-                batch_size=cfg.projector.v.batch_size,
-                shuffle=False
-                )
-            def create_V_it():
-                return get_V_iterator(
-                    model=model,
-                    dl=dl,
-                    is_classification=cfg.data.is_classification,
-                    n_batches=cfg.projector.v.n_batches,
-                    chunk_size=cfg.projector.chunk_size,
-                )
-            IPsi = HalfInvPsi(
-                V=create_V_it,
-                prior_precision=cfg.projector.sigma.prior_precision
-            )
-            return IPsi
-        return compute_psi_ggn_iterator(cfg, model, data)
+def get_s_max(model: nn.Module, dl: DataLoader, n_batches: int, batch_size: int
+    ) -> int:
+    """ 
+    Computes the maximal dimension of the operator `P` possible.
     
-    elif method in ["kron", "full"]:
-        likelihood = "classification" if cfg.data.is_classification \
-            else "regression"
-        dl = DataLoader(
-            dataset=data,
-            batch_size=cfg.projector.v.batch_size,
-            shuffle=False
-            )
-        make_deterministic(cfg.seed)
-        la = laplace.Laplace(
-                    model=model,
-                    hessian_structure=method,
-                    likelihood=likelihood,
-                    subset_of_weights="all",
-                    prior_precision=cfg.projector.sigma.prior_precision,
-                )
-        la.fit(dl)
-        if method=="kron":
-            assert type(la) is KronLaplace
-            return KronInvPsi(inv_Psi=la)
+    The dimension of `P` is the minimum of the number of differentable 
+    parameters of the model or the number of gradients.
+    """
+    n_parameters = number_of_parameters_with_grad(model)
+    device = next(iter(model.parameters())).get_device()
 
-        elif method=="full":
-            assert type(la) is FullLaplace
-            return FullInvPsi(inv_Psi=la.posterior_precision.to(dtype))
+    test_out = model(next(iter(dl))[0].to(device))
+    if len(test_out.shape) == 1:
+        n_out = 1
+    else:
+        n_out = test_out.size(-1)
+    n_data = min(
+        len(dl.dataset), n_batches * batch_size
+    )
+    return  min(n_data * n_out, n_parameters)
+
+
+def get_s_list(s_min: int, s_max: int, s_n: int) -> List[int]:
+    """ 
+    Compute a list of all dimensions of the opterator `P`.
+    
+    `s_max` and `s_min` are included.
+    """
         
-    elif method=="load_file":
-        hessian_name = cfg.projector.posterior_hessian.load.name
-        hessian_file_name = os.path.join(
-            path, cfg.projector.posterior_hessian.load.type, hessian_name
+    s_step = math.ceil((s_max-s_min) / (s_n-1))
+    s_list = np.concatenate((
+        np.arange(s_min, s_max, step=s_step),
+        np.array([s_max]),
+    ))
+    return s_list.tolist()
+
+
+def get_regression_likelihood_sigma(model, dl, classification, device):
+    """ Compute the sigma for non-classification problems. """
+    if not classification:
+        print('Estimating sigma of likelihood')
+        regression_likelihood_sigma = estimate_regression_likelihood_sigma(
+            model=model, dataloader=dl, device=device,
         )
-        with open(hessian_file_name, "rb") as f:
-            H_file = torch.load(f, map_location=cfg.device_torch)
-        
-        if hessian_file_name.startswith("Ihalf"):
-            V = H_file["H"].to(dtype)
-            return  HalfInvPsi(
-                    V=V,
-                    prior_precision=cfg.projector.sigma.prior_precision,
-                )
-        else:
-            H = H_file["H"].to(dtype)
-            assert H.size(0) == H.size(1), "Hessian must be squared matrix."
-            inv_Psi = H \
-                + cfg.projector.sigma.prior_precision \
-                * torch.eye(H.size(0)).to(cfg.device_torch)
-            return FullInvPsi(inv_Psi=inv_Psi)
-        
     else:
-        raise NotImplementedError
-
-def get_P(        
-        method: Literal["ggn_it", "load_file" "kron", "full", "swag", "magnitude", 
-                        "diagonal", "custom"], 
-        cfg: DictConfig, 
-        model: nn.Module, 
-        data_Psi: Dataset,
-        data_J: Dataset, 
-        path: str
-    ) -> InvPsi:
-    """
-    Wrapper to get the linear operator `P`.
-
-    Args:
-        method: Method to compute `P`. 
-            `ggn_it`, `load_file`, `kron` and `full` are methods to compute the 
-            posterior to obtain the optimal linear operator
-            `swag`, `magnitude`, `diagonal` and `custom` select a certain set
-            of weights to get `P` using the Laplace lib
-        cfg: Configurations file
-        model: Pytorch model
-        data_Psi: Pytorch Dataset to compute the posterior (if needed)
-        data_Psi: Pytorch Dataset to compute the Jacobians (if needed)
-        path: string to point to the file loaded by `load_file`
-    """
-
-    if method in ["ggn_it", "load_file", "kron", "full"]:
-        def create_proj_jac_it():
-            return create_jacobian_data_iterator(
-                dataset=data_J,
-                model=model,
-                batch_size=cfg.projector.batch_size,
-                number_of_batches=cfg.projector.n_batches,
-                device=cfg.device_torch,
-                dtype=getattr(torch, cfg.dtype),
-                chunk_size=cfg.projector.chunk_size,
-            )
-        inv_Psi = get_Psi(method, cfg, model, data_Psi, path)
-        U = inv_Psi.Sigma_svd(create_proj_jac_it)[0]
-        P = compute_optimal_P(IPsi=inv_Psi, J_X=create_proj_jac_it, U=U)
-        return P
-    
-    elif method in ["diagonal", "magnitude", "swag", "custom"]:
-        subset_kwargs = dict(cfg.data.swag_kwargs)
-        likelihood = "classification" if cfg.data.is_classification \
-            else "regression"
-        dl = DataLoader(
-            dataset=data_Psi,
-            batch_size=cfg.projector.v.batch_size,
-            shuffle=False
-            )
-        make_deterministic(cfg.seed)
-        Ind = subset_indices(
-                model=model,
-                likelihood=likelihood,
-                train_loader=dl,
-                method=method,
-                **subset_kwargs,
-            )
-        P = Ind.P(cfg.projector.s_max_regularized).to(cfg.device_torch)
-        return P
-
-    else:
-        raise NotImplementedError
-
+        regression_likelihood_sigma = None
+    return regression_likelihood_sigma
 
 @hydra.main(config_path="config", config_name="config")
 def run_main(cfg: DictConfig) -> None:
@@ -209,56 +93,42 @@ def run_main(cfg: DictConfig) -> None:
     torch.set_default_dtype(getattr(torch, cfg.dtype))
 
     # store all results in this dictionary
-    results = {"cfg": cfg}
-    nll = {}
-
-    print(f"Considering {cfg.data.name}")
-    get_model_kwargs = dict(cfg.pred_model.param) | dict(cfg.data.param)
-    get_model_kwargs["name"] = cfg.pred_model.name
-    results["get_model_kwargs"] = get_model_kwargs
-
-    # load optional arguments
-    corrupt_data = getattr(cfg, "corrupt_data", False)
-    s_max = cfg.projector.s.max
-    s_number = cfg.projector.s.n
-    s_min = cfg.projector.s.min
-
-    # setting up kwargs for loading of model and data
-    if not corrupt_data:
-        get_dataset_kwargs = dict(
-            name=cfg.data.name, path=cfg.data.path, dtype=cfg.dtype
-        )
-    else:
-        print(f'Using corrupt_data {cfg.data.name_corrupt}')
-        get_dataset_kwargs = dict(
-            name=cfg.data.name_corrupt, path=cfg.data.path, dtype=cfg.dtype
-        )
-    results["get_dataset_kwargs"] = get_dataset_kwargs
+    results, nll = {"cfg": cfg}, {}
 
     # setting up paths
+    print(f"Considering {cfg.data.name}")
     results_path = os.path.join(
         "results", cfg.data.name, cfg.pred_model.name, f"seed{cfg.seed}"
     )
     projector_path = os.path.join(results_path, "projector")
-    results_name = f"SigmaP{cfg.projector.sigma.method.p}" + \
-        f"Psi{cfg.projector.sigma.method.psi}{cfg.projector.name_postfix}.pt"
-    nll_name = f"nll{cfg.projector.sigma.method.p}" + \
-        f"Psi{cfg.projector.sigma.method.psi}{cfg.projector.name_postfix}.pt"
+    results_name = f"SigmaP_{cfg.projector.sigma.method.p}" + \
+        f"_Psi{cfg.projector.sigma.method.psi}{cfg.projector.name_postfix}.pt"
+    nll_name = f"nll_{cfg.projector.sigma.method.p}" + \
+        f"_Psi{cfg.projector.sigma.method.psi}{cfg.projector.name_postfix}.pt"
     results_filename = os.path.join(results_path, results_name)
     nll_filename = os.path.join(results_path, nll_name)
-    print(f"Using folder {results_path}")
 
-    # load data
+    get_model_kwargs = dict(cfg.pred_model.param) | dict(cfg.data.param)
+    get_model_kwargs["name"] = cfg.pred_model.name
+    results["get_model_kwargs"] = get_model_kwargs
+
+    # setting up kwargs for loading of model and data
+    data_name = cfg.data.name_corrupt if cfg.data.use_corrupt else cfg.data.name
+    get_dataset_kwargs = dict(
+        name=data_name, path=cfg.data.path, dtype=cfg.dtype
+        )
+    print(f'Using data {data_name}')
+    results["get_dataset_kwargs"] = get_dataset_kwargs
+
+    # load data and construct DataLoader
     train_data = get_dataset(**get_dataset_kwargs, train=True)
     test_data = get_dataset(**get_dataset_kwargs, train=False)
-    # used for fitting laplacian
-    fit_dataloader = DataLoader(
+    dl_train = DataLoader(
         dataset=train_data,
         batch_size=cfg.projector.fit.batch_size,
         shuffle=False
     )
-    # used for computation of NLL metric
-    nll_dataloader = DataLoader(
+    dl_test = DataLoader(
         dataset=test_data,
         batch_size=cfg.projector.batch_size,
         shuffle=False
@@ -274,6 +144,13 @@ def run_main(cfg: DictConfig) -> None:
             for par in module.parameters():
                 par.requires_grad = False
 
+    # load checkpoint
+    ckpt_file_name = os.path.join(results_path, "ckpt", cfg.data.model.ckpt)
+    results["ckpt_file_name"] = ckpt_file_name
+    with open(ckpt_file_name, "rb") as f:
+        state_dict = torch.load(f, map_location=cfg.device_torch)
+    model.load_state_dict(state_dict=state_dict)
+
     #  The following objects create upon call an iterator over the jacobian
     def create_proj_jac_it():
         return create_jacobian_data_iterator(
@@ -286,50 +163,30 @@ def run_main(cfg: DictConfig) -> None:
             chunk_size=cfg.projector.chunk_size,
         )
 
-    # Compute s_max and s_List
-    if s_max is None:
-        number_of_parameters = number_of_parameters_with_grad(model)
-        test_out = model(next(iter(fit_dataloader))[0].to(cfg.device_torch))
-        if len(test_out.shape) == 1:
-            n_out = 1
-        else:
-            n_out = test_out.size(-1)
-        n_data = min(
-            len(train_data), cfg.projector.n_batches * cfg.projector.batch_size
+    # Compute s_max and s_List   
+    if cfg.projector.s.max is None:
+        s_max_regularized = get_s_max(
+            model, dl_train, cfg.projector.n_batches, cfg.projector.batch_size
         )
-        s_max = min(n_data * n_out, number_of_parameters)
-    s_step = math.ceil((s_max-s_min) / (s_number-1))
-    s_list = np.concatenate((
-        np.arange(s_min, s_max, step=s_step),
-        np.array([s_max]),
-    ))
+    else:
+        s_max_regularized = cfg.projector.s.max
     with open_dict(cfg):
-        cfg.projector.s_max_regularized = s_max
-
+        cfg.projector.s_max_regularized = s_max_regularized
+    s_list = get_s_list(
+        s_min = cfg.projector.s.min,
+        s_max = cfg.projector.s_max_regularized,
+        s_n = cfg.projector.s.n
+    )
     results["s_list"] = s_list
 
-    # load checkpoint
-    ckpt_file_name = os.path.join(results_path, "ckpt", cfg.data.model.ckpt)
-    results["ckpt_file_name"] = ckpt_file_name
-    with open(ckpt_file_name, "rb") as f:
-        state_dict = torch.load(f, map_location=cfg.device_torch)
-
-    model.load_state_dict(state_dict=state_dict)
     # for regression problems estimate the sigma of the likelihood
-    if not cfg.data.is_classification:
-        print('Estimating sigma of likelihood')
-        regression_likelihood_sigma = estimate_regression_likelihood_sigma(
-            model=model,
-            dataloader=fit_dataloader,
-            device=cfg.device_torch,
-        )
-        results['regression_likelihood_sigma'] \
-            = regression_likelihood_sigma
-    else:
-        regression_likelihood_sigma = None
+    regression_likelihood_sigma = get_regression_likelihood_sigma(
+        model, dl_train, cfg.data.is_classification, cfg.device_torch
+    )
+    results['regression_likelihood_sigma'] = regression_likelihood_sigma
 
     # TODO: Check if IPsi_ggn can be deleted.
-    # IPsi_ggn = get_Psi("ggn_it", cfg, model, train_data, path=projector_path)
+    # IPsi_ggn = get_Psi("ggnit", cfg, model, train_data, path=projector_path)
     IPsi = get_Psi(
         method=cfg.projector.sigma.method.psi,
         cfg=cfg,
@@ -373,8 +230,7 @@ def run_main(cfg: DictConfig) -> None:
         chunk_size=cfg.projector.chunk_size,
         regression_likelihood_sigma=regression_likelihood_sigma,
     )
-    results["s_list"] = s_list
-    nll["s_list"] = s_list
+    results["s_list"], nll["s_list"], nll["nll"] = s_list, s_list, []
     for s, Sigma_P_s in zip(s_list, create_Sigma_P_s_it):
         # store Sigma_P
         name_Sigma = f"SigmaP{s}" if s is not None else "SigmaP"
@@ -384,14 +240,13 @@ def run_main(cfg: DictConfig) -> None:
         predictive_s = lambda X: predictive(X=X, s=s)
         nll_value = collect_NLL(
             predictive=predictive_s,
-            dataloader=nll_dataloader,
+            dataloader=dl_test,
             is_classification=cfg.data.is_classification,
             reduction="mean",
             verbose=False,
             device=cfg.device_torch
-        )
-        name_nll = f"nll{s}" if s is not None else "nll"
-        nll[name_nll] = nll_value
+        ).item()
+        update_performance_metrics(nll, "nll", nll_value)
 
     # save results after each seed computation
     print(f"Seed {cfg.seed}! Save results in {results_filename}")

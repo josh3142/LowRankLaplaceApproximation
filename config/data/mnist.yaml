@@ -5,6 +5,7 @@ name_corrupt: mnist_c-rotate
 # mnist_c-glass_blur, mnist_c-impulse_noise, mnist_c-motion_blur, mnist_c-rotate,
 # mnist_c-scale, mnist_c-shear, mnist_c-shot_noise, mnist_c-spatter
 # mnist_c-stripe, mnist_c-translate, mnist_c-zigzag
+use_corrupt: False
 path: "../../data"
 is_classification: True
 model:

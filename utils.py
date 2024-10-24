@@ -290,7 +290,6 @@ def iterator_wise_matmul(create_a_iterator: Callable[[], Iterable],
         raise ValueError
 
 
-
 def flatten_batch_and_target_dimension(J_X: Union[torch.Tensor,
                                                   Callable[[], Iterable]]
                                                   ) -> Union[torch.Tensor,

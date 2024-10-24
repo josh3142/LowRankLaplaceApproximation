@@ -1,5 +1,6 @@
 name: enb
 name_corrupt: enb
+use_corrupt: False
 path: null
 is_classification: False
 model:

@@ -19,7 +19,7 @@ def get_model(name: str, **kwargs) -> nn.Module:
         model = cnn_small(**kwargs)
     elif name=="resnet18":
         n_class = kwargs["n_class"]
-        resnet18(weights=None)
+        model = resnet18(weights=None)
         model.fc = nn.Linear(in_features=512, out_features=n_class, bias=True)
     else:
         raise NotImplementedError(name)

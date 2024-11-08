@@ -99,6 +99,8 @@ def get_jacobian(
                     fun=fun
                 ),
             chunk_size=chunk_size)(param_vec)
+    J = J.detach()
+    torch.cuda.empty_cache()
     return J
 
 # def get_lhs_linear_equ_of_1d_projector(

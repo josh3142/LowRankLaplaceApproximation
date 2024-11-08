@@ -3,7 +3,7 @@ use them to infer a projection operator and compare the results
 with `update_performance_metrics`.
 """
 
-import os 
+import os
 os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
 
 import os
@@ -25,7 +25,7 @@ from projector.projector1d import (
 )
 from data.dataset import get_dataset
 from pred_model.model import get_model
-from projector.projector import get_P, get_Psi 
+from projector.projector import get_P, get_IPsi 
 from linearized_model.low_rank_laplace import (
     compute_Sigma,
     compute_Sigma_P,
@@ -140,7 +140,7 @@ def run_main(cfg: DictConfig) -> None:
     model.to(cfg.device_torch)
     # switch off layers to ignore
     for module in model.modules():
-        if type(module) in cfg.projector.layers_to_ignore:
+        if type(module).__name__ in cfg.projector.layers_to_ignore:
             for par in module.parameters():
                 par.requires_grad = False
 
@@ -187,7 +187,7 @@ def run_main(cfg: DictConfig) -> None:
 
     # TODO: Check if IPsi_ggn can be deleted.
     # IPsi_ggn = get_Psi("ggnit", cfg, model, train_data, path=projector_path)
-    IPsi = get_Psi(
+    IPsi = get_IPsi(
         method=cfg.projector.sigma.method.psi,
         cfg=cfg,
         model=model,

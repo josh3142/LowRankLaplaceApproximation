@@ -12,9 +12,10 @@ from linearized_model.approximation_metrics import (
     trace
 )
 
+
 def update_Sigma_metrics(
     metrics_dict: dict,
-    SigmaP: torch.Tensor,
+    Sigma_approx: torch.Tensor,
     Sigma: Optional[torch.Tensor]=None,
 ):
     """ 
@@ -28,7 +29,7 @@ def update_Sigma_metrics(
     update_performance_metrics(
         metrics_dict=metrics_dict,
         key="trace",
-        value=trace(Sigma_approx=SigmaP),
+        value=trace(Sigma_approx=Sigma_approx),
     )
 
     # relative error
@@ -36,12 +37,13 @@ def update_Sigma_metrics(
         update_performance_metrics(
             metrics_dict=metrics_dict,
             key="rel_error",
-            value=relative_error(Sigma_approx=SigmaP, Sigma=Sigma),
+            value=relative_error(Sigma_approx=Sigma_approx, Sigma=Sigma),
         )
 
 
 @hydra.main(config_path="config", config_name="config")
 def run_main(cfg: DictConfig) -> None:
+    psi_ref = getattr(cfg, 'psi_ref', cfg.projector.sigma.method.psi)
  
     # set file names
     results_path = os.path.join(
@@ -54,7 +56,7 @@ def run_main(cfg: DictConfig) -> None:
         f"_Psi{cfg.projector.sigma.method.psi}{cfg.projector.name_postfix}.pt"
     SigmaP_filename = os.path.join(results_path, SigmaP_name)
     Sigma_name = f"SigmaP_None" + \
-        f"_Psi{cfg.projector.sigma.method.psi}{cfg.projector.name_postfix}.pt"
+        f"_Psi{psi_ref}{cfg.projector.name_postfix}.pt"
     Sigma_filename = os.path.join(results_path, Sigma_name)
 
     # load predictive ccovariance matrices
@@ -71,11 +73,12 @@ def run_main(cfg: DictConfig) -> None:
     results = {"s_list": s_list}
     for s in s_list:
         if s is None:
-            continue
-        Sigma_P_s = Sigma_Ps_s[f"SigmaP{s}"]
+            Sigma_approx = Sigma_Ps_s['SigmaP']
+        else:
+            Sigma_approx = Sigma_Ps_s[f"SigmaP{s}"]
         update_Sigma_metrics(
             metrics_dict=results,
-            SigmaP=Sigma_P_s,
+            Sigma_approx=Sigma_approx,
             Sigma=Sigma,
         )
     # store metrics

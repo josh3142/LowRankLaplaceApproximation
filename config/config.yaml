@@ -1,6 +1,6 @@
 defaults:
   - data: redwine
-  - pred_model: mlp_linear
+  - pred_model: mlp_small
   - projector: I
   - _self_
 

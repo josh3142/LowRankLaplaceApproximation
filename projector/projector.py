@@ -1,3 +1,5 @@
+import os
+
 from scipy.linalg import subspace_angles
 import numpy as np
 import cupy as cp
@@ -28,7 +30,7 @@ from projector.projector1d import create_jacobian_data_iterator
 
 from utils import make_deterministic
 
-def get_Psi(
+def get_IPsi(
         method: Literal["ggnit", "load_file" "kron", "full"], 
         cfg: DictConfig, 
         model: nn.Module, 
@@ -159,7 +161,7 @@ def get_P(
                 dtype=getattr(torch, cfg.dtype),
                 chunk_size=cfg.projector.chunk_size,
             )
-        inv_Psi = get_Psi(method, cfg, model, data_Psi, path)
+        inv_Psi = get_IPsi(method, cfg, model, data_Psi, path)
         U = inv_Psi.Sigma_svd(create_proj_jac_it)[0]
         P = compute_optimal_P(IPsi=inv_Psi, J_X=create_proj_jac_it, U=U)
         return P

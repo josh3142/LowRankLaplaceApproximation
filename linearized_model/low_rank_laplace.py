@@ -11,7 +11,6 @@ from utils import iterator_wise_quadratic_form, iterator_wise_matmul, \
     flatten_batch_and_target_dimension
 
 
-
 class InvPsi():
     """Classes that inherit from this class should implement `Psi_times_W` 
     `functional_covariance` and `quadratic_form`.
@@ -289,12 +288,13 @@ class IPsi_predictive():
         self.chunk_size = chunk_size
         self.regression_likelihood_sigma = regression_likelihood_sigma
         if self.P is not None:
-            self._inv_P_T_inv_Psi_P = torch.linalg.inv(IPsi.quadratic_form(W=P))
+            self._P_T_inv_Psi_P = IPsi.quadratic_form(W=P)
 
     def __call__(
             self,
             X: torch.Tensor,
             s: Optional[int] = None,
+            eps: float = 1e-10,
         ) -> Tuple[torch.Tensor, torch.Tensor]:
         predictions = self.model(X).detach()
         # uncertainties
@@ -305,14 +305,18 @@ class IPsi_predictive():
             chunk_size=self.chunk_size
         ).detach()
         if self.P is not None:
-            assert self._inv_P_T_inv_Psi_P is not None
+            assert self._P_T_inv_Psi_P is not None
             # batch_size x target dimension x number of parameters
             assert len(J_X.shape) == 3
             J_X_P = torch.einsum('btp,ps->bts', J_X, self.P[:, :s])
+            P_T_inv_Psi_P = self._P_T_inv_Psi_P[:s, :s]
+            P_T_inv_Psi_P += eps \
+                * torch.eye(P_T_inv_Psi_P.size(-1)).to(P_T_inv_Psi_P.device)
+            inv_P_T_inv_Psi_P = torch.linalg.inv(P_T_inv_Psi_P)
             variances = torch.einsum(
                 'bts,sS,STb->btT',
                 J_X_P,
-                self._inv_P_T_inv_Psi_P[:s, :s],
+                inv_P_T_inv_Psi_P,
                 J_X_P.transpose(0, -1)
             )
         else:

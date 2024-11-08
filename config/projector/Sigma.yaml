@@ -50,4 +50,4 @@ posterior_hessian:
 
 
 
-layers_to_ignore: [nn.BatchNorm2d]
+layers_to_ignore: [BatchNorm2d]

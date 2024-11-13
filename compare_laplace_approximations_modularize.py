@@ -209,7 +209,8 @@ def run_main(cfg: DictConfig) -> None:
             model, 
             data_Psi=train_data, 
             data_J=train_data, 
-            path=projector_path
+            path=projector_path,
+            s=s_max_regularized,
         )
         create_Sigma_P_s_it = compute_Sigma_P(
             P=P,

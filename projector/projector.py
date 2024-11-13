@@ -1,3 +1,4 @@
+from typing import Optional
 import os
 
 from scipy.linalg import subspace_angles
@@ -132,7 +133,8 @@ def get_P(
         model: nn.Module, 
         data_Psi: Dataset,
         data_J: Dataset, 
-        path: str
+        path: str,
+        s: Optional[int] = None,
     ) -> InvPsi:
     """
     Wrapper to get the linear operator `P`.
@@ -146,8 +148,10 @@ def get_P(
         cfg: Configurations file
         model: Pytorch model
         data_Psi: Pytorch Dataset to compute the posterior (if needed)
-        data_Psi: Pytorch Dataset to compute the Jacobians (if needed)
+        data_J: Pytorch Dataset to compute the Jacobians (if needed)
         path: string to point to the file loaded by `load_file`
+        s: If given, the eigenvectors of the SVD cut at s vectors in the
+        computation.
     """
 
     if method in ["ggnit", "load_file", "kron", "full"]:
@@ -163,7 +167,7 @@ def get_P(
             )
         inv_Psi = get_IPsi(method, cfg, model, data_Psi, path)
         U = inv_Psi.Sigma_svd(create_proj_jac_it)[0]
-        P = compute_optimal_P(IPsi=inv_Psi, J_X=create_proj_jac_it, U=U)
+        P = compute_optimal_P(IPsi=inv_Psi, J_X=create_proj_jac_it, U=U, s=s)
         return P
     
     elif method in ["diagonal", "magnitude", "swag", "custom"]:
@@ -183,7 +187,7 @@ def get_P(
                 method=method,
                 **subset_kwargs,
             )
-        P = Ind.P(cfg.projector.s_max_regularized).to(cfg.device_torch)
+        P = Ind.P(s=cfg.projector.s_max_regularized).to(cfg.device_torch)
         return P
 
     else:

@@ -16,6 +16,7 @@ def run_main(cfg: DictConfig) -> None:
     file_prefix = getattr(cfg, 'file_prefix', 'Metrics')
     metric = getattr(cfg, 'metric', 'trace')
     psi_ref = getattr(cfg, 'psi_ref', 'ggnit')
+    yscale = getattr(cfg, 'yscale', 'linear')
 
     # mandatory arguments
     data_name = cfg.data.name
@@ -117,6 +118,7 @@ def run_main(cfg: DictConfig) -> None:
             )
     plt.xlabel('s')
     plt.ylabel(metric)
+    plt.yscale(yscale)
     plt.legend()
     plt.savefig(os.path.join(
         'results',

@@ -1,13 +1,42 @@
 import os
+from typing import Literal
 import glob
 
 import hydra
 from omegaconf import DictConfig
 import torch
 import numpy as np
+
+from scipy.stats import median_abs_deviation
 import matplotlib.pyplot as plt
 
 from color_map import get_color
+
+
+def std(
+        values: np.ndarray,
+        type=Literal['std', 'std_mean', 'mad', 'mad_mean']
+) -> np.ndarray:
+    """Measure of dispersion of `values`. Depending on type either the standard
+    deviation or the MAD (median absolute deviation) is used. If
+    `..._mean` is added to the type, the dispersion is divided by
+    `len(np.sqrt(values))`.
+    """
+    if type == 'std':
+        return np.std(values, axis=0)
+    elif type == 'std_mean':
+        return np.std(values, axis=0)/np.sqrt(len(values))
+    elif type == 'mad':
+        return median_abs_deviation(x=values, axis=0, scale='normal')
+    elif type == 'mad_mean':
+        return median_abs_deviation(
+            x=values,
+            axis=0,
+            scale='normal'
+        )/np.sqrt(len(values))
+    else:
+        raise NotImplementedError('Invalid type')
+
 
 
 @hydra.main(config_path="config", config_name="config")
@@ -17,6 +46,7 @@ def run_main(cfg: DictConfig) -> None:
     metric = getattr(cfg, 'metric', 'trace')
     psi_ref = getattr(cfg, 'psi_ref', 'ggnit')
     yscale = getattr(cfg, 'yscale', 'linear')
+    std_type = getattr(cfg, 'std_type', 'std_mean')
 
     # mandatory arguments
     data_name = cfg.data.name
@@ -71,13 +101,13 @@ def run_main(cfg: DictConfig) -> None:
         values = np.stack(metric_collection[method]['values'], axis=0)
         metric_collection[method].update({
             'mean': np.mean(values, axis=0),
-            'std': np.std(values, axis=0)/np.sqrt(len(values)),
+            'std': std(values=values, type=std_type),
         })
         if metric_collection[method]['baseline']:
             baseline_values = metric_collection[method]['baseline']['values']
             metric_collection[method]['baseline'].update({
                 'mean': np.mean(baseline_values, axis=0).item(),
-                'std': np.std(baseline_values, axis=0).item()/np.sqrt(len(values)),
+                'std': std(values=baseline_values, type=std_type),
             })
 
     # plot results

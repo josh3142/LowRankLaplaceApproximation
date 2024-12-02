@@ -5,7 +5,6 @@ with `update_performance_metrics`.
 
 import os
 os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
-
 import os
 import math
 
@@ -58,7 +57,7 @@ def get_s_max(model: nn.Module, dl: DataLoader, n_batches: int, batch_size: int
     n_data = min(
         len(dl.dataset), n_batches * batch_size
     )
-    return  min(n_data * n_out, n_parameters)
+    return min(n_data * n_out, n_parameters)
 
 
 def get_s_list(s_min: int, s_max: int, s_n: int) -> List[int]:

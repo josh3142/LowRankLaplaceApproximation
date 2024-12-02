@@ -9,4 +9,5 @@
   chunk_size: null # number of vjp to compute the Jacobian for solving the LSE
   # If None, the maximum chunk size is used. 
   # If 1, then compute the jacobian row-by-row with a for-loop
+  name_postfix: "" # String to be appended on file name
   maxiter: null # maximal number iterations the solver performs

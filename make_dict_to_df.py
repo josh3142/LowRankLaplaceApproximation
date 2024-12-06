@@ -65,6 +65,18 @@ def filter_sort_file_names_by_seed(file_names: List[str]) -> List[List[str]]:
 
     return grouped_and_sorted_lists
 
+def avoid_nan_for_PNone(method: str, values: List[int], s_list: List[int]
+    ) -> List[int]:
+    """ 
+    For `PNone` only one value is stored in the dictionary. This leads to NaN 
+    values in the dataframe. Hence the value is duplicated for all `s` values.
+    """
+    if "PNone" in method and len(values)==1:
+        return values * len(s_list)
+    else:
+        return values
+
+
 @hydra.main(config_path = "config", config_name = "config")
 def run_main(cfg: DictConfig) -> None:
 

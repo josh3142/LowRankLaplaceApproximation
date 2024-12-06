@@ -38,8 +38,11 @@ sigma:
     # by the Laplace library. ggn uses the full generalized Gauss-Newton matrix
     # to compute P and load_file loads a posterior from a file
     # method.psi defines the computation of Psi in Sigma_P. 
-        p: kron # diagonal, magnitude, swag, kron, ggnit, full, load_file
-        psi: ggnit # ggnit, kron, full, load_file
+        # possible values: lowrank-diagonal, lowrank-kron, lowrank-ggnit, 
+        #                  lowrank-full, lowrank-load_file 
+        #                  subset-magnitude, subset-swag, subset-diagonal 
+        p: lowrank-kron 
+        psi: ggnit # possible values: ggnit, kron, full, load_file
     prior_precision: 1.0
 
 # if the posterior is loaded

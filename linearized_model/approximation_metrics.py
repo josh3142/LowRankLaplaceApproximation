@@ -29,9 +29,9 @@ def relative_error(
     return (norm(Sigma_approx-Sigma)/norm(Sigma)).item()
   
 
-def trace(Sigma_approx: torch.Tensor, logarithmic: bool = True) -> float:
+def trace(Sigma_approx: torch.Tensor, logarithmic: bool=True) -> float:
     if logarithmic:
-        return torch.log(torch.trace(Sigma_approx).item())
+        return np.log(torch.trace(Sigma_approx).item())
     else:
         return torch.trace(Sigma_approx).item()
 

@@ -29,7 +29,12 @@ def update_Sigma_metrics(
     update_performance_metrics(
         metrics_dict=metrics_dict,
         key="trace",
-        value=trace(Sigma_approx=Sigma_approx),
+        value=trace(Sigma_approx=Sigma_approx, logarithmic=False),
+    )
+    update_performance_metrics(
+        metrics_dict=metrics_dict,
+        key="logtrace",
+        value=trace(Sigma_approx=Sigma_approx, logarithmic=True),
     )
 
     # relative error

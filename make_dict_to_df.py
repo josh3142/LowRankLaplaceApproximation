@@ -72,12 +72,12 @@ def run_main(cfg: DictConfig) -> None:
     # (this subfolders should be the different seeds, e.g. "seed1")
     path = f"results/{cfg.data.name}/{cfg.pred_model.name}"
     file_names = glob(os.path.join(path, "*/", "*.pt"))
-    nll, rel_error, trace = {"name": "nll"}, {"name": "rel_error"}, {"name": "trace"}
+    nll, rel_error = {"name": "nll"}, {"name": "rel_error"} 
+    trace, log_trace = {"name": "trace"}, {"name": "logtrace"}
     seeds = set()
     if not are_all_s_list_the_same(file_names):
         sys.exit("Not all s_list are the same. Please have only " + \
                 "dictionaries where all s_list are the same in the folder.")
-
 
     # for file_names in file_names_sorted:
     for file_name in file_names:
@@ -86,6 +86,8 @@ def run_main(cfg: DictConfig) -> None:
 
         # works only for specific file name set by compute_metric.py or 
         # compare compare_laplace_approximations_modularize.py
+        # I.e. the underscore "_" has semantic meaning. The file name has to 
+        # contain two underscores
         if len(file_name_without_path.split("_"))==3:
             dic_name, p_approx, psi_approx = file_name_without_path.split("_")
             psi_approx, _ = psi_approx.split(".")
@@ -95,17 +97,21 @@ def run_main(cfg: DictConfig) -> None:
             if dic_name == "Metrics":
                 rel_error.setdefault(seed, {}).setdefault(name, file["rel_error"])
                 trace.setdefault(seed, {}).setdefault(name, file["trace"])
+                log_trace.setdefault(seed, {}).setdefault(name, file["logtrace"])
             elif dic_name == "nll":
                 nll.setdefault(seed, {}).setdefault(name, file["nll"])
             else:
                 continue
         seeds.add(seed)
         
-    for metric in [rel_error, trace, nll]:
+    for metric in [rel_error, trace, nll, log_trace]:
         for seed in seeds:
             df = create_evaluation_df(seed, file["s_list"]) 
-            for method in metric[seed]:        
-                df = pd.concat([df, pd.DataFrame({method: metric[seed][method]})], 
+            for method in metric[seed]: 
+                values = avoid_nan_for_PNone(
+                    method, metric[seed][method], file["s_list"]
+                )
+                df = pd.concat([df, pd.DataFrame({method: values})], 
                                axis=1)        
             try:
                 df_save = pd.concat([df_save, df], axis=0)

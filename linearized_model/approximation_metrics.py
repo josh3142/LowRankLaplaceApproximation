@@ -146,4 +146,3 @@ def update_performance_metrics(
     else:
         assert type(metrics_dict[key]) is list
         metrics_dict[key].append(value)
-

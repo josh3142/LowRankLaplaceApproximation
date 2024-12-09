@@ -9,7 +9,7 @@ from glob import glob
 import hydra 
 from omegaconf import DictConfig 
 
-from typing import Tuple
+from typing import Tuple, Optional, List
 
 from color_map import get_color, get_color2
 
@@ -71,7 +71,7 @@ def get_title(name: str) -> str:
     
 def get_ylabel(name: str) -> str:
     if name=="error":
-        return r"relative error"
+        return "Relative Error"
     elif name=="nll":
         return "NLL"
     elif name=="trace":
@@ -80,17 +80,30 @@ def get_ylabel(name: str) -> str:
         return "Log-Trace"
     else:
         raise NotImplementedError
+    
+def get_plot_settings(name: str) -> str:
+    if name=="error":
+        loc, ylim = "upper right", (-0.05, 1.05)
+    elif name=="nll":
+        loc, ylim = "lower right", None
+    elif name=="trace":
+        loc, ylim = "lower right", (-2, None)
+    elif name=="logtrace":
+        loc, ylim = "lower right", (-1, None)
+    else:
+        raise NotImplementedError
+    return loc, ylim
 
 
-
-def get_plt(df: pd.DataFrame) -> None:
+def get_plt(df: pd.DataFrame, methods: Optional[List[str]]=None) -> None:
     n_seed = len(df.seed.unique())
     df_mean = df.groupby(["dim"], as_index = False).mean()
     df_std = df.groupby(["dim"], as_index = False).std(ddof=1) / np.sqrt(n_seed)
 
-    methods = set(df.columns)
-    methods.remove("seed")
-    methods.remove("dim")
+    if methods is None:
+        methods = set(df.columns)
+        methods.remove("seed")
+        methods.remove("dim")
     for method in methods:
         p_setting, psi_setting = method.split("_")
         psi_name_plot = get_psi_name(psi_setting)
@@ -111,13 +124,21 @@ def get_plt(df: pd.DataFrame) -> None:
                         alpha = 0.15)
 
 
-def save_fig_acc(df: pd.DataFrame, img_name: str, title: str, y_label: str
+def save_fig_acc(
+        df: pd.DataFrame, 
+        img_name: str, 
+        title: str, 
+        y_label: str,
+        ylim: Tuple, 
+        loc: str, 
+        methods=Optional[List[str]]
     ) -> None:
+    
     color="black"
 
     plt.clf()
     plt.tight_layout()
-    get_plt(df)
+    get_plt(df, methods)
       
     if title is not None:
         plt.title(title)
@@ -126,7 +147,8 @@ def save_fig_acc(df: pd.DataFrame, img_name: str, title: str, y_label: str
     plt.yticks(color=color)
     plt.xticks(color=color)
     plt.gca().spines[["top", "bottom", "right", "left"]].set_color(color)
-    plt.legend()
+    plt.legend(loc=loc)
+    plt.ylim(ylim)
 
     plt.savefig(img_name)
     # plt.savefig(img_name, transparent = True, bbox_inches = "tight") # for presentation 
@@ -147,9 +169,13 @@ def run_main(cfg: DictConfig) -> None:
         # Create plot
         img_name = os.path.join(path, name)
         save_fig_acc(
-            df, img_name, 
+            df, 
+            img_name, 
             title=get_title(name), 
-            y_label=get_ylabel(name)
+            y_label=get_ylabel(name),
+            loc=get_plot_settings(name)[0],
+            ylim=get_plot_settings(name)[1],
+            methods=cfg.plot.evaluation.methods
         )
 
 

@@ -9,6 +9,11 @@ device_torch: "cuda:0"
 seed: 2
 dtype: "float64"
 
+plot:
+  evaluation:
+    # if null (None) all methods from the dataframe are plotted
+    methods: null
+
 hydra:
   job:
     chdir: False  

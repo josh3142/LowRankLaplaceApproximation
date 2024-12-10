@@ -74,7 +74,6 @@ def get_s_list(s_min: int, s_max: int, s_n: int) -> List[int]:
     ))
     return s_list.tolist()
 
-
 def get_regression_likelihood_sigma(model, dl, classification, device):
     """ Compute the sigma for non-classification problems. """
     if not classification:

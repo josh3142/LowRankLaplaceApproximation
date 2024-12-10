@@ -23,11 +23,11 @@ class subset_indices():
     def __init__(self, model: nn.Module,
                  likelihood: Literal['regression','classification'],
                  train_loader: DataLoader,
-                 method: Literal['diagonal', 'magnitude','swag','custom']='diagonal',
+                 method: Literal['diag', 'magnitude','swag','custom']='diag',
                  **kwargs) -> None:
         self.method = method
         self.number_of_parameters = number_of_parameters_with_grad(model)
-        if method == 'diagonal':
+        if method == 'diag':
             diag_laplace_model = laplace.Laplace(model=model,
                                             likelihood=likelihood,
                                             subset_of_weights='all',

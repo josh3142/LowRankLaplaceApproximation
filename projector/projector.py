@@ -14,7 +14,7 @@ from omegaconf import DictConfig
 from typing import Callable, Literal
 
 import laplace
-from laplace import FullLaplace, KronLaplace
+from laplace import FullLaplace, KronLaplace, DiagLaplace
 
 from projector.hessian import get_H_sum
 from projector.fisher import get_Vs, get_I_sum
@@ -22,6 +22,7 @@ from linearized_model.low_rank_laplace import (
     InvPsi,
     FullInvPsi,
     HalfInvPsi,
+    DiagInvPsi,
     KronInvPsi,
     compute_optimal_P
 )
@@ -32,7 +33,7 @@ from projector.projector1d import create_jacobian_data_iterator
 from utils import make_deterministic
 
 def get_IPsi(
-        method: Literal["ggnit", "load_file", "kron", "diagonal", "full"], 
+        method: Literal["ggnit", "load_file", "kron", "diag", "full"], 
         cfg: DictConfig, 
         model: nn.Module, 
         data: Dataset, 
@@ -45,7 +46,7 @@ def get_IPsi(
         method: Method to compute the posterior. 
             `ggnit` computes generalized Gauss-Newton matrix as an iterator 
             `load_file` loads a precomputed posterior
-            `kron`, `full` and `diagonal` compute `Psi` 
+            `kron`, `full` and `diag` compute `Psi` 
             with the Laplace lib
         cfg: Configurations file
         model: Pytorch model
@@ -76,7 +77,7 @@ def get_IPsi(
             return IPsi
         return compute_psi_ggn_iterator(cfg, model, data)
     
-    elif method in ["kron", "full"]:
+    elif method in ["kron", "full", "diag"]:
         likelihood = "classification" if cfg.data.is_classification \
             else "regression"
         dl = DataLoader(
@@ -101,9 +102,9 @@ def get_IPsi(
             assert type(la) is FullLaplace
             return FullInvPsi(inv_Psi=la.posterior_precision.to(dtype))
         
-        elif method=="diagonal":
-            #TODO: Implement this feature with the Laplace library
-            raise NotImplementedError()
+        elif method=="diag":
+            assert type(la) is DiagLaplace
+            return DiagInvPsi(inv_Psi=la)
         
     elif method=="load_file":
         hessian_name = cfg.projector.posterior_hessian.load.name
@@ -133,8 +134,8 @@ def get_IPsi(
 
 def get_P(        
         method: Literal["lowrank-ggnit", "lowrank-load_file" "lowrank-kron", 
-                        "lowrank-full", "lowrank-diagonal", "subset-swag", 
-                        "subset-magnitude", "subset-diagonal", "subset-custom"], 
+                        "lowrank-full", "lowrank-diag", "subset-swag", 
+                        "subset-magnitude", "subset-diag", "subset-custom"], 
         cfg: DictConfig, 
         model: nn.Module, 
         data_Psi: Dataset,
@@ -148,9 +149,9 @@ def get_P(
     Args:
         method: Method to compute `P`. 
             `lowrank-ggnit`, `lowrank-load_file`, `lowrank-kron`, 
-            `lowrank-diagonal` and `lowrank-full` are methods to compute the 
+            `lowrank-diag` and `lowrank-full` are methods to compute the 
             posterior to obtain the optimal linear operator
-            `subset-swag`, `subset-magnitude`, `subset-diagonal` and 
+            `subset-swag`, `subset-magnitude`, `subset-diag` and 
             `subset-custom` select a certain set of weights to get `P` using the 
             Laplace lib
         cfg: Configurations file
@@ -162,8 +163,7 @@ def get_P(
         computation.
     """
 
-    if method in ["lowrank-ggnit", "lowrank-load_file", "lowrank-kron", 
-                  "lowrank-diagonal", "lowrank-full"]:
+    if method.startswith("lowrank"):
         def create_proj_jac_it():
             return create_jacobian_data_iterator(
                 dataset=data_J,
@@ -180,8 +180,7 @@ def get_P(
         P = compute_optimal_P(IPsi=inv_Psi, J_X=create_proj_jac_it, U=U, s=s)
         return P
     
-    elif method in ["subset-diagonal", "subset-magnitude", "subset-swag", 
-                    "subset-custom"]:
+    elif method.startswith("subset"):
         method = method.split("-")[1] # extract name for Laplace library 
         subset_kwargs = dict(cfg.data.swag_kwargs)
         likelihood = "classification" if cfg.data.is_classification \

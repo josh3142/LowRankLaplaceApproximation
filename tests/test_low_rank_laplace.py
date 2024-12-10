@@ -7,13 +7,14 @@ from torch.utils.data import TensorDataset, DataLoader
 import torch.nn as nn
 
 import laplace
-from laplace import KronLaplace, FullLaplace
+from laplace import KronLaplace, FullLaplace, DiagLaplace
 
 from utils import flatten_batch_and_target_dimension
 from projector.projector1d import get_jacobian
 from linearized_model.low_rank_laplace import (
     FullInvPsi,
     HalfInvPsi,
+    DiagInvPsi,
     KronInvPsi,
     compute_Sigma,
     compute_optimal_P,
@@ -210,6 +211,67 @@ def test_HalfInvPsi(random_inv_psi):
         torch.isclose(it_IPsi.quadratic_form(W=W), IPsi.quadratic_form(W=W))
     )
 
+@pytest.mark.parametrize("likelihood", ["classification", "regression"])
+def test_DiagInvPsi(init_data, likelihood):
+    (
+        model,
+        train_loader,
+        test_loader,
+        X_test,
+        X_train,
+        device,
+        generator,
+        dtype,
+        prior_precision,
+    ) = init_data(likelihood)
+    J_X = get_jacobian(X=X_test, model=model, is_classification=False).to(device)
+    # fit diagonal Laplace approximation
+    la = laplace.Laplace(
+        model=model,
+        likelihood=likelihood,
+        subset_of_weights="all",
+        hessian_structure="diag",
+        prior_precision=prior_precision,
+    )
+    assert type(la) is DiagLaplace
+    la.fit(train_loader)
+
+    IPsi = DiagInvPsi(inv_Psi=la)
+    inv_Psi = torch.diag(la.posterior_precision)
+    Psi = torch.linalg.inv(inv_Psi)
+
+    # test wether precision and variance behave as expected
+    assert torch.allclose(1/IPsi.posterior_precision,IPsi.posterior_variance)
+
+    # define vectors W1, W2 for testing with other vectors than J_X
+    W1 = torch.randn(la.n_params, 3, 9, generator=generator, dtype=dtype)
+    W2 = torch.randn(la.n_params, 12, generator=generator, dtype=dtype)
+
+    # test Psi @ W
+    theoretical_value = torch.tensordot(Psi, W1, dims=([-1], [0]))
+    computed_value = IPsi.Psi_times_W(W=W1)
+    assert torch.all(torch.isclose(theoretical_value, computed_value))
+
+    # test Sigma
+    # theoretical_value
+    theoretical_value = W2.T @ inv_Psi @ W2
+    computed_value = IPsi.quadratic_form(W=W2)
+    assert torch.all(torch.isclose(theoretical_value, computed_value))
+
+    # test Sigma_batchwise
+    # shorten for computational speed
+    short_length = 3
+    short_J_X = J_X[:short_length]
+    # batch x target x parameters
+    assert len(short_J_X.shape) == 3
+    theoretical_value = []
+    for b in range(short_length):
+        theoretical_value.append(IPsi.Sigma(short_J_X[b]))
+    theoretical_value = torch.stack(theoretical_value, dim=0)
+    computed_value = IPsi.Sigma_batchwise(short_J_X)
+    assert torch.allclose(theoretical_value, computed_value)
+    
+    
 
 @pytest.mark.parametrize("likelihood", ["classification", "regression"])
 def test_KronInvPsi(init_data, likelihood):

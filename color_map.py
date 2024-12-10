@@ -15,7 +15,7 @@ colors1 = {
     'kron': cm(0),
     'magnitude': cm(1),
     'swag': cm(2),
-    'diagonal': cm(3),
+    'diag': cm(3),
     'None': 'black',
 }
 
@@ -23,7 +23,7 @@ colors2 = {
     'kron': cm(4),
     'magnitude': cm(5),
     'swag': cm(6),
-    'diagonal': plt.cm.Set1(8),
+    'diag': plt.cm.Set1(8),
     'None': 'grey',
 }
 

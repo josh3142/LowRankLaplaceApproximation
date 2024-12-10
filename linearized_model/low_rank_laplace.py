@@ -4,7 +4,7 @@ from typing import Literal, Optional, Union, Iterable, Tuple, Callable
 
 import torch
 import torch.nn as nn
-from laplace import KronLaplace, FullLaplace
+from laplace import KronLaplace, FullLaplace, DiagLaplace
 
 from projector.projector1d import get_jacobian
 from utils import iterator_wise_quadratic_form, iterator_wise_matmul, \
@@ -163,7 +163,46 @@ class HalfInvPsi(FullInvPsi):
             return V_times_W.T @ V_times_W + self.prior_precision * W.T @ W
 
 
+class DiagInvPsi(FullInvPsi):
+    """Wraps instances of the class DiagLaplace into the InvPsi class.
+    """
+    def __init__(self, inv_Psi: DiagLaplace):
+        self.inv_Psi = inv_Psi
 
+    @property
+    def posterior_variance(self) -> torch.Tensor:
+        return self.inv_Psi.posterior_variance
+
+    @property
+    def posterior_precision(self) -> torch.Tensor:
+        return self.inv_Psi.posterior_precision
+
+    @property
+    def inv_Psi_matrix(self):
+        return torch.diag(self.posterior_precision)
+
+    def Psi_times_W(self, W: torch.Tensor) -> torch.Tensor:
+        assert self.posterior_variance.size(0) == W.size(0), "Size mismatch"
+        # flatten W to make it 2D
+        flat_W = W.reshape(W.size(0), -1)
+        Psi_times_flat_W = self.posterior_variance[:,None] * flat_W
+        # restore shape
+        return Psi_times_flat_W.view(W.shape)
+
+    def _inv_Psi_times_W(self, W: torch.Tensor) -> torch.Tensor:
+        assert self.posterior_precision.size(0) == W.size(0), "Size mismatch"
+        # flatten W to make it 2D
+        flat_W = W.reshape(W.size(0), -1)
+        inv_Psi_times_flat_W = self.posterior_precision[:,None] * flat_W
+        # restore shape
+        return inv_Psi_times_flat_W.view(W.shape)
+
+
+    def quadratic_form(self, W):
+        if W.ndim > 2:
+            # flatten into 2D Tensor
+            W = W.view(-1, W.size(-1))
+        return W.T @ self._inv_Psi_times_W(W=W)
 
 class KronInvPsi(InvPsi):
     """Wraps instances of the class KronLaplace into the InvPsi class.
@@ -261,6 +300,9 @@ def compute_Sigma_P(P: torch.Tensor, IPsi: InvPsi,
                 P_s_T_inv_Psi_P_s_T = P_T_inv_Psi_P[:s,:s]
                 yield J_X_times_P_s @ inv(P_s_T_inv_Psi_P_s_T) @ J_X_times_P_s.T
         return create_Sigma_P_iterator
+
+
+
 
 
 class IPsi_predictive():

@@ -17,13 +17,14 @@ p_names = {
     'kron': "KFAC",
     'magnitude': "Magnitude",
     'swag': "SWAG",
-    'diagonal': "Diagonal",
+    'diag': "Diagonal",
     'None': "Full",
 }
 
 psi_names ={
     "Psiggnit": "GGN",
     "Psikron": "KFAC",
+    "Psidiag": "Diagonal",
     "Psifull": "GGN",
     "Psiload_file": "loaded"
 }

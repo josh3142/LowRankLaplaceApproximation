@@ -30,7 +30,6 @@ from linearized_model.subset import subset_indices
 from projector.fisher import get_V_iterator
 from projector.projector1d import create_jacobian_data_iterator
 
-from utils import make_deterministic
 
 def get_IPsi(
         method: Literal["ggnit", "load_file", "kron", "diag", "full"], 
@@ -85,7 +84,6 @@ def get_IPsi(
             batch_size=cfg.projector.v.batch_size,
             shuffle=False
             )
-        make_deterministic(cfg.seed)
         la = laplace.Laplace(
                     model=model,
                     hessian_structure=method,
@@ -190,7 +188,6 @@ def get_P(
             batch_size=cfg.projector.v.batch_size,
             shuffle=False
             )
-        make_deterministic(cfg.seed)
         Ind = subset_indices(
                 model=model,
                 likelihood=likelihood,
@@ -210,8 +207,6 @@ def get_projector_fun(name: str) -> Callable:
         raise NotImplementedError()
     else:
         raise NotImplementedError(name)
-    
-    return projector_fun
 
 
 def get_hessian_type_fun(name: str) -> Callable:
@@ -224,8 +219,6 @@ def get_hessian_type_fun(name: str) -> Callable:
         return get_I_sum
     else:
         raise NotImplementedError(name)
-    
-    return projector_fun
 
 
 def get_angle_between_matrices(A: np.ndarray, B: np.ndarray) -> np.ndarray: 

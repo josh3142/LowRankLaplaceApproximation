@@ -183,8 +183,6 @@ def run_main(cfg: DictConfig) -> None:
     )
     results['regression_likelihood_sigma'] = regression_likelihood_sigma
 
-    # TODO: Check if IPsi_ggn can be deleted.
-    # IPsi_ggn = get_Psi("ggnit", cfg, model, train_data, path=projector_path)
     IPsi = get_IPsi(
         method=cfg.projector.sigma.method.psi,
         cfg=cfg,
@@ -195,7 +193,6 @@ def run_main(cfg: DictConfig) -> None:
 
     if cfg.projector.sigma.method.p is None:
         P = None
-        # Sigma = compute_Sigma(IPsi=IPsi_ggn, J_X=create_proj_jac_it)
         Sigma = compute_Sigma(IPsi=IPsi, J_X=create_proj_jac_it)
         create_Sigma_P_s_it = iter([Sigma])
         s_list = [None]
@@ -212,7 +209,7 @@ def run_main(cfg: DictConfig) -> None:
         )
         create_Sigma_P_s_it = compute_Sigma_P(
             P=P,
-            IPsi=IPsi, #IPsi_ggn,
+            IPsi=IPsi,
             J_X=create_proj_jac_it,
             s_iterable=s_list,
         )()
@@ -220,8 +217,7 @@ def run_main(cfg: DictConfig) -> None:
     if cfg.projector.store:
         results["P"] = P
 
-    # TODO: Should is this IPsi supposed to be different from IPsi in
-    # create_Sigma_P_s_it?
+    # compute predictive to compute nll
     predictive = IPsi_predictive(
         model=model,
         IPsi=IPsi,

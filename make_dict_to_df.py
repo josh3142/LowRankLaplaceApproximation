@@ -24,18 +24,24 @@ def create_evaluation_df(
     
     return df
 
-def are_all_s_list_the_same(file_names: List[str]) -> bool:
-    "Check if all s_list in the dicitonaries are the same."
+def extract_non_trivial_s_list(file_names: List[str]) -> bool:
+    """Loops through the `s_list` items in the files from `file_names`
+    and checks whether 
+    """
+    s_list = None
     for file_name in file_names:
-        file=torch.load(file_name)
-        try:
-            if not s_list==file["s_list"]:            
-                return False
+        file = torch.load(file_name)
+        if file['s_list'] != [None,]:
+            if s_list is not None:
+                if not s_list == file["s_list"]:           
+                    raise ValueError('Different non-trivial s lists found')
+            else:
+                s_list = file['s_list']
+    assert s_list is not None, "No non trivial s list found"
+    return s_list
+    
             
-        except NameError:
-            s_list = file_name
         
-        return True
 
 def filter_sort_file_names_by_seed(file_names: List[str]) -> List[List[str]]:
     """
@@ -77,7 +83,7 @@ def avoid_nan_for_PNone(method: str, values: List[int], s_list: List[int]
         return values
 
 
-@hydra.main(config_path = "config", config_name = "config")
+@hydra.main(config_path="config", config_name="config")
 def run_main(cfg: DictConfig) -> None:
 
     # open all files with suffix ".pt" in one-level subfolder
@@ -87,9 +93,7 @@ def run_main(cfg: DictConfig) -> None:
     nll, rel_error = {"name": "nll"}, {"name": "rel_error"} 
     trace, log_trace = {"name": "trace"}, {"name": "logtrace"}
     seeds = set()
-    if not are_all_s_list_the_same(file_names):
-        sys.exit("Not all s_list are the same. Please have only " + \
-                "dictionaries where all s_list are the same in the folder.")
+    s_list = extract_non_trivial_s_list(file_names)
 
     # for file_names in file_names_sorted:
     for file_name in file_names:
@@ -118,16 +122,16 @@ def run_main(cfg: DictConfig) -> None:
         
     for metric in [rel_error, trace, nll, log_trace]:
         for seed in seeds:
-            df = create_evaluation_df(seed, file["s_list"]) 
+            df = create_evaluation_df(seed, s_list)
             for method in metric[seed]: 
                 values = avoid_nan_for_PNone(
-                    method, metric[seed][method], file["s_list"]
+                    method, metric[seed][method], s_list
                 )
-                df = pd.concat([df, pd.DataFrame({method: values})], 
-                               axis=1)        
+                df = pd.concat([df, pd.DataFrame({method: values})],
+                               axis=1) 
             try:
                 df_save = pd.concat([df_save, df], axis=0)
-            except:
+            except NameError:
                 df_save = df
         save_df(df_save, os.path.join(path, f'df_{metric["name"]}.csv'))
         del df_save

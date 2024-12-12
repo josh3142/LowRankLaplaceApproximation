@@ -32,7 +32,7 @@ from projector.projector1d import create_jacobian_data_iterator
 
 
 def get_IPsi(
-        method: Literal["ggnit", "load_file", "kron", "diag", "full"], 
+        method: Literal["ggnit", "loadfile", "kron", "diag", "full"], 
         cfg: DictConfig, 
         model: nn.Module, 
         data: Dataset, 
@@ -44,13 +44,13 @@ def get_IPsi(
     Args:
         method: Method to compute the posterior. 
             `ggnit` computes generalized Gauss-Newton matrix as an iterator 
-            `load_file` loads a precomputed posterior
+            `loadfile` loads a precomputed posterior
             `kron`, `full` and `diag` compute `Psi` 
             with the Laplace lib
         cfg: Configurations file
         model: Pytorch model
         data: Pytorch Dataset
-        path: string to point to the file loaded by `load_file`
+        path: string to point to the file loaded by `loadfile`
     """
     dtype = getattr(torch, cfg.dtype)
 
@@ -104,7 +104,7 @@ def get_IPsi(
             assert type(la) is DiagLaplace
             return DiagInvPsi(inv_Psi=la)
         
-    elif method=="load_file":
+    elif method=="loadfile":
         hessian_name = cfg.projector.posterior_hessian.load.name
         hessian_file_name = os.path.join(
             path, cfg.projector.posterior_hessian.load.type, hessian_name
@@ -131,7 +131,7 @@ def get_IPsi(
 
 
 def get_P(        
-        method: Literal["lowrank-ggnit", "lowrank-load_file" "lowrank-kron", 
+        method: Literal["lowrank-ggnit", "lowrank-loadfile" "lowrank-kron", 
                         "lowrank-full", "lowrank-diag", "subset-swag", 
                         "subset-magnitude", "subset-diag", "subset-custom"], 
         cfg: DictConfig, 
@@ -146,7 +146,7 @@ def get_P(
 
     Args:
         method: Method to compute `P`. 
-            `lowrank-ggnit`, `lowrank-load_file`, `lowrank-kron`, 
+            `lowrank-ggnit`, `lowrank-loadfile`, `lowrank-kron`, 
             `lowrank-diag` and `lowrank-full` are methods to compute the 
             posterior to obtain the optimal linear operator
             `subset-swag`, `subset-magnitude`, `subset-diag` and 
@@ -156,7 +156,7 @@ def get_P(
         model: Pytorch model
         data_Psi: Pytorch Dataset to compute the posterior (if needed)
         data_J: Pytorch Dataset to compute the Jacobians (if needed)
-        path: string to point to the file loaded by `lowrank-load_file`
+        path: string to point to the file loaded by `lowrank-loadfile`
         s: If given, the eigenvectors of the SVD cut at s vectors in the
         computation.
     """

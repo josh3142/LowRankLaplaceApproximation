@@ -17,6 +17,7 @@ colors1 = {
     'swag': cm(2),
     'diag': cm(3),
     'None': 'black',
+    'ggnit': 'black'
 }
 
 colors2 = {
@@ -25,6 +26,7 @@ colors2 = {
     'swag': cm(6),
     'diag': plt.cm.Set1(8),
     'None': 'grey',
+    'ggnit': 'grey'
 }
 
 

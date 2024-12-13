@@ -34,13 +34,16 @@ sigma:
     # Sigma_P
     method:
     # method.p defines the computation of the posterior to construct the 
-    # projector P. diagonal, magnitude, swag, kron are approximations computed 
+    # projector P. diag, magnitude, swag, kron are approximations computed 
     # by the Laplace library. ggn uses the full generalized Gauss-Newton matrix
     # to compute P and loadfile loads a posterior from a file
     # method.psi defines the computation of Psi in Sigma_P. 
-        # possible values: lowrank-diagonal, lowrank-kron, lowrank-ggnit, 
+        # possible values: lowrank-diag, lowrank-kron, lowrank-ggnit, 
         #                  lowrank-full, lowrank-loadfile 
-        #                  subset-magnitude, subset-swag, subset-diagonal 
+        #                  lowrankoptimal-diag, lowrankoptimal-kron, 
+        #                  lowrankoptimal-ggnit, lowrankoptimal-full, 
+        #                  lowrankoptimal-loadfile 
+        #                  subset-magnitude, subset-swag, subset-diag 
         p: lowrank-kron 
         psi: ggnit # possible values: ggnit, kron, full, loadfile
     prior_precision: 1.0

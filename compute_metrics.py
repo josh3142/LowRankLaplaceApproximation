@@ -54,11 +54,11 @@ def run_main(cfg: DictConfig) -> None:
     results_path = os.path.join(
         "results", cfg.data.name, cfg.pred_model.name, f"seed{cfg.seed}"
     )
-    results_name = f"Metrics_{cfg.projector.sigma.method.p}" + \
-        f"_Psi{cfg.projector.sigma.method.psi}{cfg.projector.name_postfix}.pt"
+    name = f"{cfg.projector.sigma.method.p}" + \
+        f"_Psi{cfg.projector.sigma.method.psi}{cfg.projector.name_postfix}"
+    results_name = f"Metrics_{name}.pt"
     results_filename = os.path.join(results_path, results_name)
-    SigmaP_name =f"SigmaP_{cfg.projector.sigma.method.p}" + \
-        f"_Psi{cfg.projector.sigma.method.psi}{cfg.projector.name_postfix}.pt"
+    SigmaP_name =f"SigmaP_{name}.pt"
     SigmaP_filename = os.path.join(results_path, SigmaP_name)
     Sigma_name = f"SigmaP_None" + \
         f"_Psi{psi_ref}{cfg.projector.name_postfix}.pt"

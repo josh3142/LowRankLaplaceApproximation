@@ -132,8 +132,11 @@ def get_IPsi(
 
 def get_P(        
         method: Literal["lowrank-ggnit", "lowrank-loadfile" "lowrank-kron", 
-                        "lowrank-full", "lowrank-diag", "subset-swag", 
-                        "subset-magnitude", "subset-diag", "subset-custom"], 
+                        "lowrank-full", "lowrank-diag", "lowrankoptimal-ggnit", 
+                        "lowrankoptimal-loadfile" "lowrankoptimal-kron", 
+                        "lowrankoptimal-full", "lowrankoptimal-diag", 
+                        "subset-swag", "subset-magnitude", "subset-diag", 
+                        "subset-custom"], 
         cfg: DictConfig, 
         model: nn.Module, 
         data_Psi: Dataset,
@@ -148,7 +151,8 @@ def get_P(
         method: Method to compute `P`. 
             `lowrank-ggnit`, `lowrank-loadfile`, `lowrank-kron`, 
             `lowrank-diag` and `lowrank-full` are methods to compute the 
-            posterior to obtain the optimal linear operator
+            posterior to obtain the optimal linear operator. All methods exist
+            with the variant `lowrankoptimal-...` which computes the same.
             `subset-swag`, `subset-magnitude`, `subset-diag` and 
             `subset-custom` select a certain set of weights to get `P` using the 
             Laplace lib

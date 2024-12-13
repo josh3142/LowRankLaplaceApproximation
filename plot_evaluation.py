@@ -19,6 +19,7 @@ p_names = {
     'swag': "SWAG",
     'diag': "Diagonal",
     'None': "Full",
+    'ggnit': "GGN"
 }
 
 psi_names ={
@@ -46,6 +47,8 @@ def get_linestyle(group: str) -> str:
         return "--"
     elif group=="PNone":
         return ":"
+    elif group=="Plowrankoptimal":
+        return "-."
     else:
         raise NotImplementedError
     

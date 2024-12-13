@@ -99,10 +99,10 @@ def run_main(cfg: DictConfig) -> None:
         "results", cfg.data.name, cfg.pred_model.name, f"seed{cfg.seed}"
     )
     projector_path = os.path.join(results_path, "projector")
-    results_name = f"SigmaP_{cfg.projector.sigma.method.p}" + \
-        f"_Psi{cfg.projector.sigma.method.psi}{cfg.projector.name_postfix}.pt"
-    nll_name = f"nll_{cfg.projector.sigma.method.p}" + \
-        f"_Psi{cfg.projector.sigma.method.psi}{cfg.projector.name_postfix}.pt"
+    name = f"{cfg.projector.sigma.method.p}" + \
+        f"_Psi{cfg.projector.sigma.method.psi}{cfg.projector.name_postfix}"
+    results_name = f"SigmaP_{name}.pt"
+    nll_name = f"nll_{name}.pt"
     results_filename = os.path.join(results_path, results_name)
     nll_filename = os.path.join(results_path, nll_name)
 
@@ -203,7 +203,8 @@ def run_main(cfg: DictConfig) -> None:
             cfg, 
             model, 
             data_Psi=train_data, 
-            data_J=train_data, 
+            data_J=train_data if not "lowrankoptimal" in cfg.projector.sigma.method.p \
+                else test_data, # theoretical optimal solution needs test_data 
             path=projector_path,
             s=s_max_regularized,
         )

@@ -25,8 +25,11 @@ def create_evaluation_df(
     return df
 
 def extract_non_trivial_s_list(file_names: List[str]) -> bool:
-    """Loops through the `s_list` items in the files from `file_names`
-    and checks whether 
+    """
+    Loops through the `s_list` items in the files from `file_names`
+    and checks whether all s_list are either the same list of integers or
+    [None,]. Returns the list of integers or throws an error if no such list
+    was found.
     """
     s_list = None
     for file_name in file_names:

@@ -4,6 +4,7 @@ import re
 from typing import List, Literal
 
 import matplotlib.pyplot as plt
+import matplotlib as mpl
 import numpy as np
 import torch
 
@@ -12,11 +13,12 @@ from color_map import get_color
 # %%
 ##  hyperparameters
 # for loading
-p_methods = ['kron', 'magnitude', 'swag']
+p_methods = ['lowrank-kron',  'subset-magnitude', 'subset-swag']
 psi_ref = 'loadfile'
 # for plotting
 marker_types = ['o', '^', 's']
 delta_x_list = [-0.1,0.0, 0.1]
+fontsize = 16
 
 # %%
 # to format labels in the plots (removes underscores)
@@ -32,7 +34,7 @@ pathname = os.path.join('results','mnist','cnn_small')
 seed_folders = glob.glob(os.path.join(pathname, 'seed*'))
 corruption_files = [os.path.basename(file) for file in glob.glob(os.path.join(pathname,
                                           os.path.basename(seed_folders[-1]),
-                                          'Metrics_kron_Psiload_file_c-*'))]
+                                          'Metrics_lowrank-kron_Psiloadfile_c-*'))]
 corruptions = [re.search('_c-(.*)\.pt$',file).group(1) for file in corruption_files]
 
 # %%
@@ -82,6 +84,7 @@ for i,s in enumerate(s_list):
             
 # %%
 # plot results
+mpl.rcParams['font.size'] = fontsize
 print('relative error results')
 plt.figure(1)
 plt.clf()
@@ -104,8 +107,8 @@ plt.savefig(plot_file('rel_error'), bbox_inches='tight')
 
 # %%
 # plot results
+plt.figure(1)
 print('trace results')
-plt.figure(2)
 plt.clf()
 for i, (s, marker, delta_x) in enumerate(zip(s_list, marker_types, delta_x_list)):
     for method in p_methods:

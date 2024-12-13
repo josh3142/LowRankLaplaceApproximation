@@ -3,6 +3,7 @@ import os
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import matplotlib as mpl
 
 from glob import glob
 
@@ -12,6 +13,7 @@ from omegaconf import DictConfig
 from typing import Tuple, Optional, List
 
 from color_map import get_color, get_color2
+
 
 p_names = {
     'kron': "KFAC",
@@ -73,18 +75,6 @@ def get_p_line_formating(method: str) -> Tuple[str, str]:
         group, name = "PNone", "None"
     return group, name
 
-def get_title(name: str) -> str:
-    if name=="error":
-        return r"Relative Error between $P_{full}$ and $P_{method}$"
-    elif name=="nll":
-        return "Negative Log-Likelihood"
-    elif name=="trace":
-        return "Trace of Covariance Matrix $\Sigma$"
-    elif name=="logtrace":
-        return "Logarithm of Trace of Covariance Matrix $\Sigma$"
-    else:
-        raise NotImplementedError
-    
 def get_ylabel(name: str) -> str:
     if name=="error":
         return "Relative Error"
@@ -159,6 +149,7 @@ def save_fig_acc(
         y_label: str,
         ylim: Tuple, 
         loc: str, 
+        cfg: DictConfig,
         methods=Optional[List[str]]
     ) -> None:
     
@@ -168,22 +159,21 @@ def save_fig_acc(
     plt.tight_layout()
     get_plt(df, methods, is_label_method, is_label_psi)
       
-    if title is not None:
-        plt.title(title)
     plt.xlabel(r"$s$", color=color)
     plt.ylabel(f"{y_label}", color=color)
     plt.yticks(color=color)
     plt.xticks(color=color)
     plt.gca().spines[["top", "bottom", "right", "left"]].set_color(color)
-    plt.legend(loc=loc)
+    if cfg.plot.show_legend:
+        plt.legend(loc=loc, fontsize=cfg.plot.fontsize.legend)
     plt.ylim(ylim)
-
-    plt.savefig(img_name)
+    plt.savefig(img_name, bbox_inches='tight')
     # plt.savefig(img_name, transparent = True, bbox_inches = "tight") # for presentation 
 
 
 @hydra.main(config_path = "config", config_name = "config")
 def run_main(cfg: DictConfig) -> None:
+    mpl.rcParams['font.size'] = cfg.plot.fontsize.axes  # Set global font size
 
     path = f"results/{cfg.data.name}/{cfg.pred_model.name}"
     file_names = glob(os.path.join(path, "*.csv"))
@@ -205,7 +195,8 @@ def run_main(cfg: DictConfig) -> None:
             y_label=get_ylabel(name),
             loc=get_plot_settings(name)[0],
             ylim=get_plot_settings(name)[1],
-            methods=cfg.plot.evaluation.methods
+            methods=cfg.plot.evaluation.methods,
+            cfg=cfg
         )
 
 

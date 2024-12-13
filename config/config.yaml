@@ -10,6 +10,10 @@ seed: 2
 dtype: "float64"
 
 plot:
+  fontsize: 
+    axes: 18
+    legend: 12
+  show_legend: False
   evaluation:
     # if null (None) all methods from the dataframe are plotted
     methods: null

@@ -26,7 +26,7 @@ psi_names ={
     "Psikron": "KFAC",
     "Psidiag": "Diagonal",
     "Psifull": "GGN",
-    "Psiload_file": "loaded"
+    "Psiloadfile": "loaded"
 }
 
 def get_p_name(method: str) -> str:

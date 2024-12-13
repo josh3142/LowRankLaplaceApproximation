@@ -13,7 +13,7 @@ from color_map import get_color
 ##  hyperparameters
 # for loading
 p_methods = ['kron', 'magnitude', 'swag']
-psi_ref = 'load_file'
+psi_ref = 'loadfile'
 # for plotting
 marker_types = ['o', '^', 's']
 delta_x_list = [-0.1,0.0, 0.1]

@@ -13,6 +13,9 @@ plot:
   evaluation:
     # if null (None) all methods from the dataframe are plotted
     methods: null
+    legend: # display information in legend
+      reduction_type: True
+      psi: False
 
 hydra:
   job:

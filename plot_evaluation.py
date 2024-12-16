@@ -30,6 +30,13 @@ psi_names ={
     "Psiloadfile": "loaded"
 }
 
+p_method = {
+    "Plowrank": "lowrank",
+    "Psubset": "subset",
+    "PNone": "None",
+    "Plowrankoptimal": "lowrankopt"
+}
+
 def get_p_name(method: str) -> str:
     if not method in p_names.keys():
         raise NotImplementedError
@@ -39,6 +46,11 @@ def get_psi_name(method: str) -> str:
     if not method in psi_names.keys():
         raise NotImplementedError
     return psi_names[method]
+
+def get_p_method(method: str) -> str:
+    if not method in p_method.keys():
+        raise NotImplementedError
+    return p_method[method]
 
 def get_linestyle(group: str) -> str:
     if group=="Plowrank":
@@ -99,7 +111,12 @@ def get_plot_settings(name: str) -> str:
     return loc, ylim
 
 
-def get_plt(df: pd.DataFrame, methods: Optional[List[str]]=None) -> None:
+def get_plt(
+        df: pd.DataFrame, 
+        methods: Optional[List[str]]=None,
+        is_label_method: bool=True, 
+        is_label_psi: bool=False
+    ) -> None:
     n_seed = len(df.seed.unique())
     df_mean = df.groupby(["dim"], as_index = False).mean()
     df_std = df.groupby(["dim"], as_index = False).std(ddof=1) / np.sqrt(n_seed)
@@ -114,11 +131,16 @@ def get_plt(df: pd.DataFrame, methods: Optional[List[str]]=None) -> None:
         p_group, p_name = get_p_line_formating(p_setting)
         p_name_plot = get_p_name(p_name)
 
+        # generate label
+        label_method = f"{get_p_method(p_group)}-" if is_label_method else ""
+        label_psi = fr"$-\Psi_{{{psi_name_plot}}}$" if is_label_psi else ""
+        label = fr"$P_{{{label_method}{p_name_plot}}}${label_psi}"
+        
         plt.plot(df_mean["dim"], 
                  df_mean[f"{method}"], 
                  marker="x",
                  color=get_color(p_name) if psi_name_plot=="GGN" else get_color2(p_name), 
-                 label=fr"$P_{{{p_name_plot}}}-\Psi_{{{psi_name_plot}}}$", 
+                 label=label, 
                  alpha= 1.,
                  linestyle=get_linestyle(p_group))
         plt.fill_between(df_mean["dim"], 
@@ -131,6 +153,8 @@ def get_plt(df: pd.DataFrame, methods: Optional[List[str]]=None) -> None:
 def save_fig_acc(
         df: pd.DataFrame, 
         img_name: str, 
+        is_label_method: bool,
+        is_label_psi: bool,
         title: str, 
         y_label: str,
         ylim: Tuple, 
@@ -142,7 +166,7 @@ def save_fig_acc(
 
     plt.clf()
     plt.tight_layout()
-    get_plt(df, methods)
+    get_plt(df, methods, is_label_method, is_label_psi)
       
     if title is not None:
         plt.title(title)
@@ -175,6 +199,8 @@ def run_main(cfg: DictConfig) -> None:
         save_fig_acc(
             df, 
             img_name, 
+            is_label_method=cfg.plot.evaluation.legend.reduction_type,
+            is_label_psi=cfg.plot.evaluation.legend.psi,
             title=get_title(name), 
             y_label=get_ylabel(name),
             loc=get_plot_settings(name)[0],

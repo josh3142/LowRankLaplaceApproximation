@@ -333,4 +333,5 @@ def where_parameters_with_grad(model: nn.Module) -> torch.Tensor:
         ]
         )
 
-    
+def number_of_parameters(model: nn.Module) -> int:
+    return sum([p.numel() for p in model.parameters()])

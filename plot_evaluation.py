@@ -89,7 +89,7 @@ def get_ylabel(name: str) -> str:
     
 def get_plot_settings(name: str) -> str:
     if name=="error":
-        loc, ylim = "upper right", (-0.05, 1.05)
+        loc, ylim = "lower left", (-0.05, 1.05)
     elif name=="nll":
         loc, ylim = "lower right", None
     elif name=="trace":
@@ -145,7 +145,6 @@ def save_fig_acc(
         img_name: str, 
         is_label_method: bool,
         is_label_psi: bool,
-        title: str, 
         y_label: str,
         ylim: Tuple, 
         loc: str, 
@@ -191,7 +190,6 @@ def run_main(cfg: DictConfig) -> None:
             img_name, 
             is_label_method=cfg.plot.evaluation.legend.reduction_type,
             is_label_psi=cfg.plot.evaluation.legend.psi,
-            title=get_title(name), 
             y_label=get_ylabel(name),
             loc=get_plot_settings(name)[0],
             ylim=get_plot_settings(name)[1],

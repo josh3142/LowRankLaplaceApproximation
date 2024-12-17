@@ -15,6 +15,7 @@ import laplace.utils.subnetmask
 
 from projector.projector1d import (
     number_of_parameters_with_grad,
+    number_of_parameters,
     where_parameters_with_grad,
 )
 
@@ -27,6 +28,7 @@ class subset_indices():
                  **kwargs) -> None:
         self.method = method
         self.number_of_parameters = number_of_parameters_with_grad(model)
+        full_number_of_parameters = number_of_parameters(model)
         if method == 'diag':
             diag_laplace_model = laplace.Laplace(model=model,
                                             likelihood=likelihood,
@@ -52,7 +54,14 @@ class subset_indices():
             self.metric = self.subnet_mask.compute_param_scores(train_loader=train_loader)
 
         # only consider those parameters with requires_grad = True
-        self.metric = self.metric[where_parameters_with_grad(model)]
+        if method in ['diag']:
+            assert len(self.metric) == self.number_of_parameters
+        else:
+            # only chose those metric values
+            # that belong to a parameter with requires_grad = True
+            # (not done by default by the Laplace library)
+            assert len(self.metric) == full_number_of_parameters
+            self.metric = self.metric[where_parameters_with_grad(model)]
 
     
     def __call__(self, s: int, sort: bool = False):

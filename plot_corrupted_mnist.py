@@ -13,12 +13,13 @@ from color_map import get_color
 # %%
 ##  hyperparameters
 # for loading
-p_methods = ['lowrank-kron',  'subset-magnitude', 'subset-swag']
+p_methods = ['lowrank-kron', 'lowrank-diag', 'subset-diag','subset-magnitude', 'subset-swag']
 psi_ref = 'loadfile'
 # for plotting
-marker_types = ['o', '^', 's']
-delta_x_list = [-0.1,0.0, 0.1]
-fontsize = 16
+markersizes = [3,4,5]
+markertypes = {'lowrank': 'o', 'subset': 's'}
+delta_x_list = [-0.3,0.0, 0.3]
+fontsize = 14
 
 # %%
 # to format labels in the plots (removes underscores)
@@ -48,9 +49,8 @@ def metrics_file(
     return os.path.join(seed_folder,
             f'Metrics_{p_method}_Psi{psi_ref}_c-{corruption}.pt')
 
-            
 def plot_file(metric: Literal['rel_error', 'trace']) -> str:
-    return os.path.join(pathname, f'plot_mnist_c_{metric}.pdf')
+    return os.path.join(pathname, f'{metric}_mnist_c.png')
 
 # %%
 # load s list
@@ -64,7 +64,7 @@ with open(
 # collect results
 rel_error_results = {}
 trace_results = {}
-for i,s in enumerate(s_list):
+for i, s in enumerate(s_list):
     rel_error_results[s] = {}
     trace_results[s] = {}
     for corruption in corruptions:
@@ -88,43 +88,55 @@ mpl.rcParams['font.size'] = fontsize
 print('relative error results')
 plt.figure(1)
 plt.clf()
-for i, (s, marker, delta_x) in enumerate(zip(s_list, marker_types, delta_x_list)):
-    for method in p_methods:
+for i, (s, markersize, delta_x) in enumerate(zip(s_list, markersizes, delta_x_list)):
+    for p_method in p_methods:
+        methodclass, ptype = p_method.split('-')
         mean_values = []
         std_values = []
         x = 1.0 * np.arange(len(corruptions)) + delta_x
         for corruption in corruptions:
-            mean_values.append(np.mean(rel_error_results[s][corruption][method]))
-            std_values.append(np.std(rel_error_results[s][corruption][method])
-                              /np.sqrt(len(trace_results[s][corruption][method])))
-        plt.errorbar(x=x, y=mean_values, yerr=std_values, color=get_color(method), fmt=marker, 
-                     alpha=.5)
+            mean_values.append(np.mean(rel_error_results[s]
+                [corruption][p_method])
+            )
+            std_values.append(np.std(rel_error_results[s]
+            [corruption][p_method])
+                /np.sqrt(len(trace_results[s][corruption][p_method]))
+            )
+        plt.errorbar(x=x, y=mean_values, yerr=std_values, color=get_color(ptype),
+                    fmt=markertypes[methodclass], 
+                    markersize=markersize,
+                    alpha=.5)
     plt.xticks(x, remove_underscores(corruptions), rotation=90)
     plt.ylabel(r'relative error')
-    plt.legend()
     plt.tight_layout()
 plt.savefig(plot_file('rel_error'), bbox_inches='tight')
 
 # %%
 # plot results
-plt.figure(1)
+mpl.rcParams['font.size'] = fontsize
 print('trace results')
+plt.figure(1)
 plt.clf()
-for i, (s, marker, delta_x) in enumerate(zip(s_list, marker_types, delta_x_list)):
-    for method in p_methods:
+for i, (s, markersize, delta_x) in enumerate(zip(s_list, markersizes, delta_x_list)):
+    for p_method in p_methods:
+        methodclass, ptype = p_method.split('-')
         mean_values = []
         std_values = []
         x = 1.0 * np.arange(len(corruptions)) + delta_x
         for corruption in corruptions:
-            mean_values.append(np.mean(trace_results[s][corruption][method]))
-            std_values.append(np.std(trace_results[s][corruption][method])
-                              /np.sqrt(len(trace_results[s][corruption][method])))
-        plt.errorbar(x=x, y=mean_values, yerr=std_values, color=get_color(method), fmt=marker, 
-                     alpha=.5)
-
-    # plt.yscale('log')
+            mean_values.append(np.mean(trace_results[s]
+                [corruption][p_method])
+            )
+            std_values.append(np.std(trace_results[s]
+            [corruption][p_method])
+                /np.sqrt(len(trace_results[s][corruption][p_method]))
+            )
+        plt.errorbar(x=x, y=mean_values, yerr=std_values, color=get_color(ptype),
+                    fmt=markertypes[methodclass], 
+                    markersize=markersize,
+                    alpha=.5)
     plt.xticks(x, remove_underscores(corruptions), rotation=90)
-    plt.ylabel(r'$log(tr\, \Sigma_{X,P})$')
-    plt.legend()
+    plt.ylabel(r'trace')
+    plt.yscale('log')
     plt.tight_layout()
 plt.savefig(plot_file('trace'), bbox_inches='tight')

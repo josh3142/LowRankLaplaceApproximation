@@ -1,7 +1,7 @@
 defaults:
   - data: redwine
   - pred_model: mlp_small
-  - projector: I
+  - projector: Sigma
   - _self_
 
 device: [0] # relevant devices are given by list (-1 is cpu) # this might not work on cluster

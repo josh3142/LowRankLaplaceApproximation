@@ -129,14 +129,14 @@ def get_plt(
         plt.plot(df_mean["dim"], 
                  df_mean[f"{method}"], 
                  marker="x",
-                 color=get_color(p_name) if psi_name_plot=="GGN" else get_color2(p_name), 
+                 color=get_color(p_name) if psi_name_plot in ["GGN", "loaded"] else get_color2(p_name), 
                  label=label, 
                  alpha= 1.,
                  linestyle=get_linestyle(p_group))
         plt.fill_between(df_mean["dim"], 
                         df_mean[f"{method}"] - df_std[f"{method}"],
                         df_mean[f"{method}"] + df_std[f"{method}"],
-                        color = get_color(p_name) if psi_name_plot=="GGN" else get_color2(p_name),
+                        color = get_color(p_name) if psi_name_plot in ["GGN", "loaded"] else get_color2(p_name),
                         alpha = 0.15)
 
 

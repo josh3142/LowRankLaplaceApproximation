@@ -52,7 +52,7 @@ def run_main(cfg: DictConfig) -> None:
  
     # set file names
     results_path = os.path.join(
-        "results", cfg.data.name, cfg.pred_model.name, f"seed{cfg.seed}"
+        "results", cfg.data.folder_name, cfg.pred_model.name, f"seed{cfg.seed}"
     )
     name = f"{cfg.projector.sigma.method.p}" + \
         f"_Psi{cfg.projector.sigma.method.psi}{cfg.projector.name_postfix}"

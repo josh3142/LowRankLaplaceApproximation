@@ -11,7 +11,7 @@ import torch
 from color_map import get_color
 
 # %%
-##  hyperparameters
+#  hyperparameters
 # for loading
 p_methods = ['lowrank-kron', 'lowrank-diag', 'subset-diag','subset-magnitude', 'subset-swag']
 psi_ref = 'loadfile'

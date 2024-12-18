@@ -1,4 +1,5 @@
 name: redwine
+folder_name: redwine
 name_corrupt: redwine
 use_corrupt: False
 path: null

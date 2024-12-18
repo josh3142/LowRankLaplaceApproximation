@@ -1,4 +1,5 @@
 name: mnist_small
+folder_name: mnist_small
 name_corrupt: mnist_small
 path: "../../data"
 is_classification: True

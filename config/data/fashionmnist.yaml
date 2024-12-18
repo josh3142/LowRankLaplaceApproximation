@@ -1,4 +1,5 @@
 name: fashionmnist
+folder_name: fashionmnist
 name_corrupt: fashionmnist
 use_corrupt: False
 path: "../../data"

@@ -96,7 +96,7 @@ def run_main(cfg: DictConfig) -> None:
     # setting up paths
     print(f"Considering {cfg.data.name}")
     results_path = os.path.join(
-        "results", cfg.data.name, cfg.pred_model.name, f"seed{cfg.seed}"
+        "results", cfg.data.folder_name, cfg.pred_model.name, f"seed{cfg.seed}"
     )
     projector_path = os.path.join(results_path, "projector")
     name = f"{cfg.projector.sigma.method.p}" + \

@@ -91,7 +91,7 @@ def run_main(cfg: DictConfig) -> None:
 
     # open all files with suffix ".pt" in one-level subfolder
     # (this subfolders should be the different seeds, e.g. "seed1")
-    path = f"results/{cfg.data.name}/{cfg.pred_model.name}"
+    path = f"results/{cfg.data.folder_name}/{cfg.pred_model.name}"
     file_names = glob(os.path.join(path, "*/", "*.pt"))
     nll, rel_error = {"name": "nll"}, {"name": "rel_error"} 
     trace, log_trace = {"name": "trace"}, {"name": "logtrace"}

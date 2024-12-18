@@ -1,4 +1,5 @@
 name: protein
+folder_name: protein
 name_corrupt: protein
 use_corrupt: False
 path: null

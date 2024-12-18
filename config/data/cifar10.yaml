@@ -1,4 +1,5 @@
 name: cifar10
+folder_name: cifar10
 name_corrupt: cifar10_corrupt
 use_corrupt: False
 path: "../../data"

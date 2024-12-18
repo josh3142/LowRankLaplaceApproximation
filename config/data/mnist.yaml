@@ -1,4 +1,5 @@
 name: mnist
+folder_name: mnist
 name_corrupt: mnist_c-rotate
 # other corruption options are
 # mnist_c-brightness, mnist_c-canny_edges, mnist_c-dotted_line, mnist_c-fog

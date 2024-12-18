@@ -1,4 +1,5 @@
 name: enb
+folder_name: enb
 name_corrupt: enb
 use_corrupt: False
 path: null

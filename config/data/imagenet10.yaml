@@ -1,4 +1,5 @@
 name: imagenet10
+folder_name: imagenet10
 name_corrupt: imagenet10
 use_corrupt: False
 path: "../../data"

@@ -2,5 +2,5 @@ name: mlp_small
 param:
   activation: relu
   n_layer: 2
-  n_hidden: 256 
+  n_hidden: 128 
 last_layer: logit

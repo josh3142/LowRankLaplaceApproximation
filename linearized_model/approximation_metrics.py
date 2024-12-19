@@ -26,7 +26,7 @@ def relative_error(
         Sigma: torch.Tensor,
         norm: Callable=torch.linalg.norm
 ) -> float:
-    return (norm(Sigma_approx-Sigma)/norm(Sigma)).item()
+    return (norm(Sigma_approx.cpu()-Sigma.cpu())/norm(Sigma.cpu())).item()
   
 
 def trace(Sigma_approx: torch.Tensor, logarithmic: bool=True) -> float:

@@ -21,7 +21,8 @@ p_names = {
     'swag': "SWAG",
     'diag': "Diagonal",
     'None': "Full",
-    'ggnit': "GGN"
+    'ggnit': "GGN",
+    'loadfile': "GGN",
 }
 
 psi_names ={
@@ -29,7 +30,7 @@ psi_names ={
     "Psikron": "KFAC",
     "Psidiag": "Diagonal",
     "Psifull": "GGN",
-    "Psiloadfile": "loaded"
+    "Psiloadfile": "GGN"
 }
 
 p_method = {
@@ -174,7 +175,7 @@ def save_fig_acc(
 def run_main(cfg: DictConfig) -> None:
     mpl.rcParams['font.size'] = cfg.plot.fontsize.axes  # Set global font size
 
-    path = f"results/{cfg.data.name}/{cfg.pred_model.name}"
+    path = f"results/{cfg.data.folder_name}/{cfg.pred_model.name}"
     file_names = glob(os.path.join(path, "*.csv"))
 
     for file_name in file_names:

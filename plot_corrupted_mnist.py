@@ -13,11 +13,12 @@ from color_map import get_color
 # %%
 #  hyperparameters
 # for loading
-p_methods = ['lowrank-kron', 'lowrank-diag', 'subset-diag','subset-magnitude', 'subset-swag']
+p_methods = ['lowrank-kron', 'lowrank-diag', 'subset-diag','subset-magnitude', 'subset-swag',
+             'lowrankoptimal-loadfile']
 psi_ref = 'loadfile'
 # for plotting
-markersizes = [3,4,5]
-markertypes = {'lowrank': 'o', 'subset': 's'}
+markersizes = [3,4,5.5]
+markertypes = {'lowrank': 'o', 'subset': 's', 'lowrankoptimal': '^'}
 delta_x_list = [-0.3,0.0, 0.3]
 fontsize = 14
 
@@ -31,7 +32,7 @@ def remove_underscores(str_list: List[str]) -> List[str]:
 
 # %%
 # collect keywords from files
-pathname = os.path.join('results','mnist','cnn_small')
+pathname = os.path.join('results','mnist_c','cnn_small')
 seed_folders = glob.glob(os.path.join(pathname, 'seed*'))
 corruption_files = [os.path.basename(file) for file in glob.glob(os.path.join(pathname,
                                           os.path.basename(seed_folders[-1]),

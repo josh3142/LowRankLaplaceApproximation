@@ -62,14 +62,14 @@ def get_regression_likelihood_sigma(model, dl, classification, device):
 
 @hydra.main(config_path="config", config_name="config")
 def run_main(cfg: DictConfig) -> None:
+    compute_rank = getattr(cfg, 'compute_rank', True)
     make_deterministic(cfg.seed)
     torch.set_default_dtype(getattr(torch, cfg.dtype))
-
 
     # setting up paths
     print(f"Considering {cfg.data.name}")
     results_path = os.path.join(
-        "results", cfg.data.name, cfg.pred_model.name, f"seed{cfg.seed}"
+        "results", cfg.data.folder_name, cfg.pred_model.name, f"seed{cfg.seed}"
     )
 
     get_model_kwargs = dict(cfg.pred_model.param) | dict(cfg.data.param)
@@ -134,8 +134,9 @@ def run_main(cfg: DictConfig) -> None:
     # p
     number_of_parameters = number_of_parameters_with_grad(model)
     # rank J_X
-    print('Computing rank(J_X)')
-    J_X = torch.concat([j for j in create_train_jac_it()], dim=0)
+    if compute_rank:
+        print('Computing rank(J_X)')
+        J_X = torch.concat([j for j in create_train_jac_it()], dim=0)
     print('Summary\n .......')
 
     print(f'len(train_data): {len(train_data)}')
@@ -144,7 +145,8 @@ def run_main(cfg: DictConfig) -> None:
     print(f'sigma (for regression): {regression_likelihood_sigma}')
     print(f'number of parameters: {number_of_parameters}')
     print(f's_max: {s_max_regularized}')
-    print(f'rank(J_X): {torch.linalg.matrix_rank(J_X)}')
+    if compute_rank:
+        print(f'rank(J_X): {torch.linalg.matrix_rank(J_X)}')
 
 
 if __name__ == "__main__":

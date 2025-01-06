@@ -20,7 +20,7 @@ psi_ref = 'loadfile'
 markersizes = [3,4,5.5]
 markertypes = {'lowrank': 'o', 'subset': 's', 'lowrankoptimal': '^'}
 delta_x_list = [-0.3,0.0, 0.3]
-fontsize = 14
+fontsize = 18
 
 # %%
 # to format labels in the plots (removes underscores)
@@ -50,8 +50,18 @@ def metrics_file(
     return os.path.join(seed_folder,
             f'Metrics_{p_method}_Psi{psi_ref}_c-{corruption}.pt')
 
-def plot_file(metric: Literal['rel_error', 'trace']) -> str:
-    return os.path.join(pathname, f'{metric}_mnist_c.png')
+
+def nll_file(
+    seed_folder: str,
+    p_method: str,
+    psi_ref: str,
+    corruption: str
+) -> str:
+    return os.path.join(seed_folder,
+            f'nll_{p_method}_Psi{psi_ref}_c-{corruption}.pt')
+
+def plot_file(metric: Literal['rel_error', 'trace', 'nll']) -> str:
+    return os.path.join(pathname, f'{metric}.png')
 
 # %%
 # load s list
@@ -65,15 +75,19 @@ with open(
 # collect results
 rel_error_results = {}
 trace_results = {}
+nll_results = {}
 for i, s in enumerate(s_list):
     rel_error_results[s] = {}
     trace_results[s] = {}
+    nll_results[s] = {}
     for corruption in corruptions:
         rel_error_results[s][corruption] = {}
         trace_results[s][corruption] = {}
+        nll_results[s][corruption] = {}
         for p_method in p_methods:
             rel_error_results[s][corruption][p_method] = []
             trace_results[s][corruption][p_method] = []
+            nll_results[s][corruption][p_method] = []
             for seed_folder in seed_folders:
                 with open(
                     metrics_file(seed_folder, p_method, psi_ref, corruption), 
@@ -82,6 +96,12 @@ for i, s in enumerate(s_list):
                     metrics = torch.load(f)
                 rel_error_results[s][corruption][p_method].append(metrics['rel_error'][i])
                 trace_results[s][corruption][p_method].append(metrics['trace'][i])
+                with open(
+                    nll_file(seed_folder, p_method, psi_ref, corruption), 
+                    'rb'
+                ) as f:
+                    nll_metrics = torch.load(f)
+                nll_results[s][corruption][p_method].append(nll_metrics['nll'][i])
             
 # %%
 # plot results
@@ -108,7 +128,7 @@ for i, (s, markersize, delta_x) in enumerate(zip(s_list, markersizes, delta_x_li
                     markersize=markersize,
                     alpha=.5)
     plt.xticks(x, remove_underscores(corruptions), rotation=90)
-    plt.ylabel(r'relative error')
+    plt.ylabel(r'Relative Error')
     plt.tight_layout()
 plt.savefig(plot_file('rel_error'), bbox_inches='tight')
 
@@ -116,7 +136,7 @@ plt.savefig(plot_file('rel_error'), bbox_inches='tight')
 # plot results
 mpl.rcParams['font.size'] = fontsize
 print('trace results')
-plt.figure(1)
+plt.figure(2)
 plt.clf()
 for i, (s, markersize, delta_x) in enumerate(zip(s_list, markersizes, delta_x_list)):
     for p_method in p_methods:
@@ -137,7 +157,36 @@ for i, (s, markersize, delta_x) in enumerate(zip(s_list, markersizes, delta_x_li
                     markersize=markersize,
                     alpha=.5)
     plt.xticks(x, remove_underscores(corruptions), rotation=90)
-    plt.ylabel(r'trace')
+    plt.ylabel(r'Trace')
     plt.yscale('log')
     plt.tight_layout()
 plt.savefig(plot_file('trace'), bbox_inches='tight')
+
+# %%
+mpl.rcParams['font.size'] = fontsize
+print('nll results')
+plt.figure(2)
+plt.clf()
+for i, (s, markersize, delta_x) in enumerate(zip(s_list, markersizes, delta_x_list)):
+    for p_method in p_methods:
+        methodclass, ptype = p_method.split('-')
+        mean_values = []
+        std_values = []
+        x = 1.0 * np.arange(len(corruptions)) + delta_x
+        for corruption in corruptions:
+            mean_values.append(np.mean(nll_results[s]
+                [corruption][p_method])
+            )
+            std_values.append(np.std(nll_results[s]
+            [corruption][p_method])
+                /np.sqrt(len(nll_results[s][corruption][p_method]))
+            )
+        plt.errorbar(x=x, y=mean_values, yerr=std_values, color=get_color(ptype),
+                    fmt=markertypes[methodclass], 
+                    markersize=markersize,
+                    alpha=.5)
+    plt.xticks(x, remove_underscores(corruptions), rotation=90)
+    plt.ylabel(r'NLL')
+    plt.yscale('log')
+    plt.tight_layout()
+plt.savefig(plot_file('nll'), bbox_inches='tight')

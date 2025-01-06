@@ -98,6 +98,11 @@ def run_main(cfg: DictConfig) -> None:
     seeds = set()
     s_list = extract_non_trivial_s_list(file_names)
 
+    # include relative error by default
+    # is switched to False below, if at least one of the loaded files
+    # does not have the relative error included
+    include_rel_error = True
+
     # for file_names in file_names_sorted:
     for file_name in file_names:
         path_seed, file_name_without_path = os.path.split(file_name)
@@ -114,7 +119,12 @@ def run_main(cfg: DictConfig) -> None:
             name = f"P{p_approx}_{psi_approx}"
 
             if dic_name == "Metrics":
-                rel_error.setdefault(seed, {}).setdefault(name, file["rel_error"])
+                try:
+                    rel_error.setdefault(seed, {}).setdefault(
+                        name, file["rel_error"]
+                    )
+                except KeyError:
+                    include_rel_error = False
                 trace.setdefault(seed, {}).setdefault(name, file["trace"])
                 log_trace.setdefault(seed, {}).setdefault(name, file["logtrace"])
             elif dic_name == "nll":
@@ -123,7 +133,11 @@ def run_main(cfg: DictConfig) -> None:
                 continue
         seeds.add(seed)
         
-    for metric in [rel_error, trace, nll, log_trace]:
+    if include_rel_error:
+        metric_list = [rel_error, trace, nll, log_trace]
+    else:
+        metric_list = [trace, nll, log_trace]
+    for metric in metric_list:
         for seed in seeds:
             df = create_evaluation_df(seed, s_list)
             for method in metric[seed]: 

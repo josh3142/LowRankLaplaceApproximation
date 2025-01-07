@@ -97,7 +97,7 @@ def test_subset_methods(init_data: Tuple):
     model, train_loader, test_loader, X_test, device, likelihood = init_data
     # diagonal
     subind = subset_indices(model=model, likelihood=likelihood,
-                     train_loader=train_loader, method='diagonal')
+                     train_loader=train_loader, method='diag')
     diag_laplace_model = laplace.Laplace(model=model,
                                     likelihood=likelihood,
                                     subset_of_weights='all',

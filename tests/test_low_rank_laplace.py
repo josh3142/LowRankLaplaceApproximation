@@ -7,10 +7,15 @@ from torch.utils.data import TensorDataset, DataLoader
 import torch.nn as nn
 
 import laplace
-from laplace import KronLaplace, FullLaplace, DiagLaplace
+from laplace import KronLaplace, FullLaplace, DiagLaplace, Laplace
+from laplace.utils import (
+    LargestVarianceDiagLaplaceSubnetMask,
+    LargestMagnitudeSubnetMask,
+    LargestVarianceSWAGSubnetMask
+)
 
 from utils import flatten_batch_and_target_dimension
-from projector.projector1d import get_jacobian
+from projector.projector1d import get_jacobian, number_of_parameters_with_grad
 from linearized_model.low_rank_laplace import (
     FullInvPsi,
     HalfInvPsi,
@@ -22,6 +27,7 @@ from linearized_model.low_rank_laplace import (
     compute_Sigma_s,
     IPsi_predictive,
 )
+from linearized_model.subset import subset_indices
 
 
 @pytest.fixture
@@ -508,3 +514,97 @@ def test_glm_predictive(
         theoretical_variances.append(compute_Sigma_P(P=P, IPsi=IPsi, J_X=j[None, ...]))
     theoretical_variances = torch.stack(theoretical_variances, dim=0)
     assert torch.allclose(theoretical_variances, variances)
+
+@pytest.mark.parametrize("subset_method", ["diag", "magnitude", "swag"])
+@pytest.mark.parametrize("likelihood", ["regression"])
+def test_subset_predictive_variances_via_laplace_library(
+    init_data: Callable,
+    likelihood: Literal["regression", "classification"],
+    subset_method: Literal["diag", "magnitude", "swag"],
+):
+    (
+        model,
+        train_loader,
+        test_loader,
+        X_test,
+        X_train,
+        device,
+        generator,
+        dtype,
+        prior_precision,
+    ) = init_data(likelihood)
+    sigma_noise = 1.0
+    ggn_la = FullLaplace(
+        model=model,
+        likelihood=likelihood,
+        sigma_noise=sigma_noise,
+    )
+    ggn_la.fit(train_loader)
+    IPsi = FullInvPsi(inv_Psi=ggn_la.posterior_precision.to(dtype))
+    Ind = subset_indices(
+        model=model,
+        likelihood=likelihood,
+        train_loader=train_loader,
+        method=subset_method,
+    )
+    s_max = number_of_parameters_with_grad(model)
+    s_list = [int(s_max/3), int(s_max/2)]
+    P = Ind.P(s=s_max).to(dtype)
+    predictive = IPsi_predictive(
+        model=model,
+        IPsi=IPsi,
+        P=P,
+        regression_likelihood_sigma=sigma_noise,
+    )
+    for s in s_list:
+        predictions, variances = predictive(X=X_test, s=s, eps=0.0)
+        if subset_method == 'diag':
+            diag_laplace_model = laplace.Laplace(
+                model=model,
+                likelihood=likelihood,
+                subset_of_weights='all',
+                hessian_structure='diag',
+                sigma_noise=sigma_noise,
+            )
+            subnetwork_mask = LargestVarianceDiagLaplaceSubnetMask(
+                model=model,
+                n_params_subnet=s,
+                diag_laplace_model=diag_laplace_model,
+            )
+            subnetwork_mask.select(train_loader=train_loader)
+            subnetwork_indices = subnetwork_mask.indices
+        elif subset_method == 'magnitude':
+            subnetwork_mask = LargestMagnitudeSubnetMask(
+                model=model,
+                n_params_subnet=s
+            )
+            subnetwork_mask.select(train_loader=train_loader)
+            subnetwork_indices = subnetwork_mask.indices
+        elif subset_method == 'swag':
+            # use the Ind object from above to ignore
+            # random influences in the swag index selection
+            subnetwork_indices = Ind(s)
+        else:
+            raise NotImplementedError
+        la = Laplace(
+            model=model,
+            likelihood=likelihood,
+            subset_of_weights="subnetwork",
+            hessian_structure="full",
+            subnetwork_indices=subnetwork_indices,
+            sigma_noise=sigma_noise,
+        )
+        la.fit(train_loader)
+        theoretical_predictions, theoretical_variances = la.__call__(X_test)
+        # correct with sigma noise
+        theoretical_variances += sigma_noise**2 \
+            * torch.eye(theoretical_variances.size(1)).unsqueeze(0).repeat(
+                theoretical_variances.size(0), 1, 1
+            )
+
+        assert torch.allclose(predictions, theoretical_predictions)
+        assert torch.allclose(variances, theoretical_variances)
+
+        
+
+

@@ -97,7 +97,7 @@ def collect_NLL(
         torch.Tensor: NLL as collection, sum or average (depending on
         `reduction`.)
     """
-    ll_collection = []
+    nll_collection = []
     if verbose:
         dataloader_with_description = tqdm(dataloader, desc='Collecting LL')
     else:
@@ -106,7 +106,7 @@ def collect_NLL(
         if device is not None:
             x, y= x.to(device), y.to(device)
         predictions, variances = predictive(x)
-        ll_collection.append(
+        nll_collection.append(
             NLL(
                 predictions=predictions,
                 variances=variances,
@@ -115,13 +115,13 @@ def collect_NLL(
                 sum=False
             )
         )
-    ll_collection = torch.concat(ll_collection, dim=0)
+    nll_collection = torch.concat(nll_collection, dim=0)
     if reduction == 'none':
-        return ll_collection
+        return nll_collection
     elif reduction == 'sum':
-        return torch.sum(ll_collection)
+        return torch.sum(nll_collection)
     elif reduction == 'mean':
-        return torch.mean(ll_collection)
+        return torch.mean(nll_collection)
     else:
         raise NotImplementedError
 

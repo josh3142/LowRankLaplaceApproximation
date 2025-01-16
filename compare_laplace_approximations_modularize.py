@@ -179,10 +179,15 @@ def run_main(cfg: DictConfig) -> None:
     )
     results["s_list"] = s_list
 
+    if cfg.projector.data_std is None:
     # for regression problems estimate the sigma of the likelihood
-    regression_likelihood_sigma = get_regression_likelihood_sigma(
-        model, dl_train, cfg.data.is_classification, cfg.device_torch
-    )
+        regression_likelihood_sigma = get_regression_likelihood_sigma(
+            model, dl_train, cfg.data.is_classification, cfg.device_torch
+        )
+    elif cfg.projector.data_std > 0:
+        regression_likelihood_sigma = cfg.projector.data_std
+    else:
+        raise ValueError("Insert a None or a positive number for `data_std`.")
     results['regression_likelihood_sigma'] = regression_likelihood_sigma
 
     IPsi = get_IPsi(

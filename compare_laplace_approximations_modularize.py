@@ -15,6 +15,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 import numpy as np
 
+from pathlib import Path
 from typing import List
 
 from utils import estimate_regression_likelihood_sigma
@@ -105,6 +106,7 @@ def run_main(cfg: DictConfig) -> None:
     nll_name = f"nll_{name}.pt"
     results_filename = os.path.join(results_path, results_name)
     nll_filename = os.path.join(results_path, nll_name)
+    Path(os.path.join(results_path, "ckpt")).mkdir(parents=True, exist_ok=True)
 
     get_model_kwargs = dict(cfg.pred_model.param) | dict(cfg.data.param)
     get_model_kwargs["name"] = cfg.pred_model.name

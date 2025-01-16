@@ -1,0 +1,19 @@
+name: synthsinus
+folder_name: synthsinus
+name_corrupt: synthsinus
+use_corrupt: False
+path: "data/Sinus_NTrain100.npz"
+is_classification: False
+model:
+  ckpt: "epoch1499-step1500_dict.ckpt"
+projector:
+   n_sample: 300
+param:
+  H: 1
+  W: 1
+  C: 1
+  n_class: 1
+swag_kwargs:
+  swag_n_snapshots: 10
+  swag_snapshot_freq: 1
+  swag_lr: 0.01

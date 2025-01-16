@@ -227,6 +227,14 @@ def get_dataset(
             _, _, X, Y = get_navalpro(path)
         data = DatasetGenerator(X, Y, transform=transform(), dtype=dtype)
 
+    elif name.lower()=="synthsinus":
+        data_loaded = np.load(path)
+        if train:
+            X, Y = data_loaded["X_tr"], data_loaded["Y_tr"]
+        else:
+            X, Y = data_loaded["X_te"], data_loaded["Y_te"]
+        data = DatasetGenerator(X, Y, transform=None, is_classification=False) 
+
     else:
         raise NotImplementedError(f"Dataset {name} is not implemented.")
         

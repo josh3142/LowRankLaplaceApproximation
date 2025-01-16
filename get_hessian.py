@@ -27,7 +27,7 @@ def run_main(cfg: DictConfig) -> None:
     elif cfg.dtype=="float32":
         torch.set_default_dtype(torch.float64)
 
-    path = f"results/{cfg.data.name}/{cfg.pred_model.name}/seed{cfg.seed}"
+    path = f"results/{cfg.data.folder_name}/{cfg.pred_model.name}/seed{cfg.seed}"
     path_model = os.path.join(path, "ckpt")
     path_projector = os.path.join(path, f"projector/{cfg.projector.name}")
     path_results_i = os.path.join(path_projector)

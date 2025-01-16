@@ -71,7 +71,7 @@ def run_main(cfg: DictConfig) -> None:
 
     print(cfg)
 
-    path = f"results/{cfg.data.name}/{cfg.pred_model.name}/seed{cfg.seed}"
+    path = f"results/{cfg.data.folder_name}/{cfg.pred_model.name}/seed{cfg.seed}"
     path_projector = os.path.join(path, f"projector/{cfg.projector.name}")
   
     Hdict = torch.load(os.path.join(

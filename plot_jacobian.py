@@ -3,16 +3,12 @@
 import os
 os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
 import os
-import math
 
 import hydra
 from omegaconf import DictConfig
 import torch
-import torch.nn as nn
 from torch.utils.data import DataLoader
 
-
-from utils import estimate_regression_likelihood_sigma
 from projector.projector1d import (
     create_jacobian_data_iterator,
     number_of_parameters_with_grad,
@@ -51,11 +47,6 @@ def run_main(cfg: DictConfig) -> None:
     # load data and construct DataLoader
     train_data = get_dataset(**get_dataset_kwargs, train=True)
     test_data = get_dataset(**get_dataset_kwargs, train=False)
-    dl_train = DataLoader(
-        dataset=train_data,
-        batch_size=cfg.projector.fit.batch_size,
-        shuffle=False
-    )
 
     # load network
     model = get_model(**get_model_kwargs)
@@ -93,7 +84,7 @@ def run_main(cfg: DictConfig) -> None:
     figure_name = os.path.join(results_path, 'J_X.png') 
     plt.xlabel('parameters')
     plt.ylabel('data')
-    print(f'Saving J_X under {figure_name}')
+    print(f'Saving $J_X$ under {figure_name}')
     plt.savefig(figure_name)
 
     print('sorting Jacobian')
@@ -103,15 +94,22 @@ def run_main(cfg: DictConfig) -> None:
     assert sorted_J_X.shape == J_X.shape
     figure_name = os.path.join(results_path, 'sorted_J_X.png') 
 
-    fig, axes = plt.subplots(2, 1, figsize=(8, 8), sharex=True, gridspec_kw={'height_ratios': [3, 1]})
-    axes[0].imshow(J_X[:,sort_idx].abs().cpu().numpy(), aspect='auto', cmap='viridis', interpolation='nearest')
-    axes[0].set_title('Matrix J_X Heatmap')
-    axes[0].set_ylabel('data')
-    axes[0].tick_params(axis='x', which='both', bottom=False, top=False, labelbottom=False)  # Hide x-ticks
+    fig, axes = plt.subplots(2, 1, figsize=(8, 8), sharex=True, 
+        gridspec_kw={'height_ratios': [3, 1]})
+    axes[0].imshow(J_X[:,sort_idx].abs().cpu().numpy(), aspect='auto', 
+        cmap='viridis', interpolation='nearest')
+    axes[0].set_title(r'Matrix $J_{x_i}$ Heatmap', fontsize=26)
+    axes[0].set_ylabel(r'data $x_i$', fontsize=20)
+    axes[0].tick_params(axis='x', labelsize=20, which='both', bottom=False, top=False, 
+            labelbottom=False)  # Hide x-ticks
+    axes[0].tick_params(axis="y", labelsize=18)
 
-    axes[1].plot(range(len(J_X_summary)), J_X_summary[sort_idx].cpu().numpy(), color='red', marker='o', label='Summary Vector')
-    axes[1].set_xlabel('parameters (sorted)')
-    axes[1].set_ylabel('averaged gradient')
+    axes[1].plot(range(len(J_X_summary)), J_X_summary[sort_idx].cpu().numpy(), 
+        color='red', marker='o', label='Summary Vector')
+    axes[1].set_xlabel(r'parameters $\theta$ (sorted)', fontsize=18)
+    axes[1].set_ylabel(r'$\frac{1}{n} \sum_i \; |\, J_{x_i} |$', fontsize=20)
+    axes[1].tick_params(axis="x", labelsize=18)
+    axes[1].tick_params(axis="y", labelsize=18)
 
     # Set log scale on the x-axis for both plots
     axes[0].set_xscale('log')

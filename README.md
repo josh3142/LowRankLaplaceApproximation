@@ -1,29 +1,32 @@
-# Subspace Uncertainty
-...
+# Optimal Subspace Inference for the Laplace Approximation of Bayesian Neural Networks
+Subspace inference for neural networks assumes that a subspace of their parameter space suffices to produce a reliable uncertainty quantification. In this repository, various subspace models are implemented to evaluate their approximation quality. For more information see [Paper]
 
 ## Requirements
 
 ### Packages
-Create a virtual environment with `python=3.11` and install all the packages with `pip` from `requirements.txt`. The relevant environment is provided:
+To run the code install the required packages. 
+
+Create a virtual environment with `python=3.11` and install all the packages with `pip` from `requirementsLaplaceRed.txt`. However, one can also create the predefined environment from `create_env_LaplaceRed.yml`. 
+```setup
+conda env create -f utils/create_env_LaplaceRed.yml
+conda activate LaplaceRed
+pip install -r utils/requirementsLaplaceRed.txt
+pip install laplace-torch==0.2.1
 ```
-conda env create -f utils/create_env.yml
-conda activate FisherSub
-pip install -r utils/requirements.txt
-pip install --upgrade build
-python -m build ./drbayes
-pip install drbayes/dist/subspace_inference-0.0.tar.gz
-python -m build ./swa_gaussian
-pip install swa_gaussian/dist/swag-0.0.tar.gz
-```
+
+## Introduction with a notebook
+
+A short introduction and an illustrative example of the paper and the repository is presented in `ShowCaseLaplaceRed.ipynb`. This `jupyter` notebook walks through the main steps of the computation for a simple one-dimensional toy example.
 
 ## Running the script
-[hydra](https://hydra.cc/docs/intro/) might be used later
 
-## TODO:
-1. Implement FIM for classification (softmax)
-2. Implement a numerical method to obtain the dominant Hessian eigenvectors. 
-3. (So far the calculated Hessian is returned as dictionary. For bigger models this Hessian should either be transformed into a vector, or the Hessian should be evaluated differently, or it is not necessary, since we calculate the eigenvectors with method 2.)
+Some experiments are precoded in the `bash` scripts that are contained in the folder `scripts`. However, note that they require the weights of the neural networks to run, but these are not provided in this repository. To use these scripts own nets have to be trained and the trained weights have to be put in the corresponding folders `ckpt`. (But for the toy example in `ShowCaseLaplaceRed.ipynb` everything is provided.)
 
+Nevertheless, these scripts illustrate how to get the scripts running with user defined adjustments. Each script runs one experiment for different seeds. Other options can be easily selected. To manage different configurations [hydra](https://hydra.cc/docs/intro/) is used. 
+```
+bash scripts/redwine.sh
+```
+computes the covariance matrix of the predictive distribution for different dimensions $s$ and computes the relative error, logarithm of the trace, trace and negative log-likelihood for various subspace models. All these results are stored in a dataframe and plotted.
 
 
 ## Disclaimer
@@ -52,3 +55,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 ## Reference
+If you find this repository useful, please cite our paper. 
+
+To be included

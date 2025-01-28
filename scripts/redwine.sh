@@ -2,7 +2,7 @@
 
 # general
 cuda=0
-seed="1,2,3,4,5"
+seed=1 #"1,2,3,4,5"
 s_max=796
 
 # data
@@ -17,6 +17,7 @@ n_layer=2
 p="lowrank-kron,lowrank-diag,subset-diag,subset-magnitude,subset-swag,lowrankoptimal-ggnit"
 psi_ref=ggnit
 psi_approx=kron
+jacobian_seed=0
 
 # Plotting options
 plot_evaluation_methods="[Psubset-swag_Psiggnit,Plowrank-diag_Psiggnit,Psubset-diag_Psiggnit,Plowrank-kron_Psiggnit,Psubset-magnitude_Psiggnit,Plowrankoptimal-ggnit_Psiggnit]"
@@ -30,6 +31,7 @@ CUDA_VISIBLE_DEVICES=$cuda python get_epistemic_covariance.py -m \
     projector.s.max=$s_max \
     projector.sigma.method.p=null \
     projector.sigma.method.psi="$psi_ref,$psi_approx" \
+    projector.jacobian_seed=$jacobian_seed \
     seed=$seed
 
 # compute epistemic covariance and nll for all projectors p
@@ -41,6 +43,7 @@ CUDA_VISIBLE_DEVICES=$cuda python get_epistemic_covariance.py -m \
     projector.s.max=$s_max \
     projector.sigma.method.p=$p \
     projector.sigma.method.psi=$psi_ref \
+    projector.jacobian_seed=$jacobian_seed \
     seed=$seed
 
 # compute metric for all projector p

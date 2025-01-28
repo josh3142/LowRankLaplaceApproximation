@@ -25,6 +25,7 @@ psi_approx=kron
 posterior_hessian_file=I60000.pt
 projector_batch_size=50
 v_batch_size=200
+jacobian_seed=0
 
 # Plotting options
 plot_evaluation_methods="[Psubset-swag_Psiloadfile,Plowrank-diag_Psiloadfile,Psubset-diag_Psiloadfile,Plowrank-kron_Psiloadfile,Psubset-magnitude_Psiloadfile,Plowrankoptimal-loadfile_Psiloadfile]"
@@ -55,6 +56,7 @@ CUDA_VISIBLE_DEVICES=$cuda python get_epistemic_covariance.py -m \
     projector.posterior_hessian.load.name=$posterior_hessian_file \
     projector.v.batch_size=$v_batch_size \
     projector.batch_size=$projector_batch_size \
+    projector.jacobian_seed=$jacobian_seed \
     seed=$seed
 
 # compute epistemic covariance and nll for all projectors p
@@ -67,6 +69,7 @@ CUDA_VISIBLE_DEVICES=$cuda python get_epistemic_covariance.py -m \
     projector.posterior_hessian.load.name=$posterior_hessian_file \
     projector.v.batch_size=$v_batch_size \
     projector.batch_size=$projector_batch_size \
+    projector.jacobian_seed=$jacobian_seed \
     seed=$seed
 
 # compute metric for all projector p

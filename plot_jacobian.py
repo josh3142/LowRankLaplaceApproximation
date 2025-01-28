@@ -73,6 +73,7 @@ def run_main(cfg: DictConfig) -> None:
             number_of_batches=cfg.projector.n_batches,
             device=cfg.device_torch,
             dtype=getattr(torch, cfg.dtype),
+            jacobian_order_seed=cfg.projector.jacobian_seed,
             chunk_size=cfg.projector.chunk_size,
         )
 

@@ -3,6 +3,7 @@ store: False # should the operator to reduce the dimension be stored?
 # batches and chunk_size determine the storage cost to compute the projector P
 batch_size: 100 # batch size to compute projector
 n_batches: 10 # number of iterations to compute the Jacobian.
+jacobian_seed: 0 # seed of selecting samples to construct the Jacobian 
 # The Jacobian is computed for `batch_size * n_batches` samples
 chunk_size: null # number of vjp to compute the Jacobian for computing P
 # If None, the maximum chunk size is used. 

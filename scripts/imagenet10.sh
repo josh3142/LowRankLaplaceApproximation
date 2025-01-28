@@ -24,6 +24,8 @@ psi_ref=ggnit
 projector_batch_size=4
 projector_n_batches=25
 v_batch_size=3
+jacobian_seed=0
+
 
 # compute epistemic covariance and nll for all projectors p
 CUDA_VISIBLE_DEVICES=$cuda python get_epistemic_covariance.py -m \
@@ -37,6 +39,7 @@ CUDA_VISIBLE_DEVICES=$cuda python get_epistemic_covariance.py -m \
     projector.v.batch_size=$v_batch_size \
     projector.batch_size=$projector_batch_size \
     projector.n_batches=$projector_n_batches \
+    projector.jacobian_seed=$jacobian_seed \
     seed=$seed
 
 # compute metric for the full Laplace approximation

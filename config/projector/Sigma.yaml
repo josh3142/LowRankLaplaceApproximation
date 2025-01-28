@@ -13,7 +13,7 @@ data_std: null # if null the standard deviation for regression is estimated
 # data. 
 # This is only relevant for regression problems
 
-# arguments to compute the matrix to construct Fisher information I = V.T @ V
+# arguments to compute the matrix V to construct Fisher information I = V.T @ V
 v:
     n_batches: null
     batch_size: 100

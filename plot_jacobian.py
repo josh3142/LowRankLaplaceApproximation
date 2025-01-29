@@ -25,7 +25,7 @@ def run_main(cfg: DictConfig) -> None:
     make_deterministic(cfg.seed)
     torch.set_default_dtype(getattr(torch, cfg.dtype))
     use_train = getattr(cfg, 'use_train', True)
-    threshold = getattr(cfg, 'threshol', 0.0)
+    threshold = getattr(cfg, 'threshold', 0.0)
     
 
     # setting up paths

@@ -12,7 +12,7 @@ from pred_model.model import get_model
 from data.dataset import get_dataset
 from projector.projector import get_hessian_type_fun
 
-from utils import make_deterministic
+from utils import make_deterministic, estimate_regression_likelihood_sigma
 
 
 @hydra.main(config_path = "config", config_name = "config")
@@ -50,6 +50,8 @@ def run_main(cfg: DictConfig) -> None:
         batch_size=cfg.projector.batch_size
     )
 
+    device = torch.device(cfg.device_torch)
+
     model = get_model(cfg.pred_model.name, 
         **(dict(cfg.pred_model.param) | dict(cfg.data.param)))
     state_dict = torch.load(
@@ -58,9 +60,20 @@ def run_main(cfg: DictConfig) -> None:
         weights_only=False
     )
     model.load_state_dict(state_dict)
-    model.to(cfg.device_torch)
+    model.to(device)
 
     model.eval()
+
+
+    if not cfg.data.is_classification:
+        data_var = estimate_regression_likelihood_sigma(
+            model=model,
+            dataloader=dl,
+            device=device,
+        )**2
+    else:
+        data_var = 1.0 # has no effect
+
     with torch.no_grad():
         # compute Hessian/FI
         H = get_hessian_type_fun(cfg.projector.name)(
@@ -68,7 +81,8 @@ def run_main(cfg: DictConfig) -> None:
             dl=dl,
             is_classification=cfg.data.is_classification,
             n_batches=cfg.projector.n_batches,
-            chunk_size=cfg.projector.chunk_size
+            chunk_size=cfg.projector.chunk_size,
+            var=data_var,
         )
         if cfg.projector.n_batches is None:
             n_sample = len(dataset)

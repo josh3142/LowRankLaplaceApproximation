@@ -9,6 +9,7 @@ s_max=1000
 
 # data
 data=cifar10
+data_folder_name=cifar10
 
 # model parameters
 model=resnet9
@@ -21,43 +22,76 @@ swag_n_snapshots=40
 p="lowrank-kron,lowrank-diag,subset-diag,subset-magnitude,subset-swag" 
 psi_ref=ggnit
 projector_batch_size=10
+n_batches=100
 v_batch_size=10
-jacobian_seed=0
 
-
-# compute epistemic covariance and nll for all projectors p
+# compute projectors for all submodels
 CUDA_VISIBLE_DEVICES=$cuda python get_epistemic_covariance.py -m \
     data=$data \
+    data.folder_name=$data_folder_name \
     pred_model=$model \
     projector=Sigma\
-    projector.s.max=$s_max \
     projector.sigma.method.p=$p \
     projector.sigma.method.psi=$psi_ref \
+    projector.s.max=$s_max projector.s.n=$s_number \
     projector.v.batch_size=$v_batch_size \
+    projector.n_batches=$n_batches \
     projector.batch_size=$projector_batch_size \
-    projector.jacobian_seed=$jacobian_seed \
+    projector.n_batches=$n_batches \
     seed=$seed
 
-# compute metric for the full Laplace approximation
-CUDA_VISIBLE_DEVICES=$cuda python compute_metrics.py -m \
+# compute epistemic covariance for all submodels
+CUDA_VISIBLE_DEVICES=$cuda python get_epistemic_covariance.py -m \
     data=$data \
+    data.folder_name=$data_folder_name \
     pred_model=$model \
     projector=Sigma\
-    projector.s.max=$s_max \
+    projector.sigma.method.p=$p \
+    projector.sigma.method.psi=$psi_ref \
+    projector.s.max=$s_max projector.s.n=$s_number \
+    projector.v.batch_size=$v_batch_size \
+    projector.n_batches=$n_batches \
+    projector.batch_size=$projector_batch_size \
+    projector.n_batches=$n_batches \
+    seed=$seed
+
+# compute covariance based metrics for all submodels
+CUDA_VISIBLE_DEVICES=$cuda python compute_covariance_metrics.py -m \
+    data=$data \
+    data.folder_name=$data_folder_name \
+    pred_model=$model \
+    projector=Sigma\
     projector.sigma.method.p=$p \
     projector.sigma.method.psi=$psi_ref \
     projector.v.batch_size=$v_batch_size \
+    projector.n_batches=$n_batches \
     projector.batch_size=$projector_batch_size \
     seed=$seed
 
-# transform the python dictionaries into a dataframe
+
+# compute predictive distribution based metrics for all submodels
+CUDA_VISIBLE_DEVICES=$cuda python compute_predictive_metrics.py -m \
+    data=$data \
+    data.folder_name=$data_folder_name \
+    pred_model=$model \
+    projector=Sigma\
+    projector.sigma.method.p=$p \
+    projector.sigma.method.psi=$psi_ref \
+    projector.v.batch_size=$v_batch_size \
+    projector.n_batches=$n_batches \
+    projector.batch_size=$projector_batch_size \
+    seed=$seed
+
+# transform dictionaries into a dataframes
 python make_dict_to_df.py -m \
     data=$data \
+    data.folder_name=$data_folder_name \
     pred_model=$model \
 
 # create the plots based on the dataframes
 python plot_evaluation.py -m \
     data=$data \
+    data.folder_name=$data_folder_name \
     pred_model=$model \
 
 

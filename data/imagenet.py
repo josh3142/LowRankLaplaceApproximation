@@ -14,11 +14,10 @@ import json
 
 from typing import Tuple, Callable, Literal, Optional, List, Dict
 
-import pdb
 
 class ImageNetKaggle(Dataset):
     """
-    ImageNet Dataset. Code taken from 
+    Load ImageNet Dataset as available on Kaggle.
     """
     def __init__(self, root: str,
                  split: Literal['train', 'val'],
@@ -28,11 +27,11 @@ class ImageNetKaggle(Dataset):
         self.transform = transform
         self.syn_to_class = {}
         with open(os.path.join(root, "imagenet_class_index.json"), "rb") as f:
-                    json_file = json.load(f)
-                    for class_id, v in json_file.items():
-                        self.syn_to_class[v[0]] = int(class_id)
+            json_file = json.load(f)
+            for class_id, v in json_file.items():
+                self.syn_to_class[v[0]] = int(class_id)
         with open(os.path.join(root, "ILSVRC2012_val_labels.json"), "rb") as f:
-                    self.val_to_syn = json.load(f)
+            self.val_to_syn = json.load(f)
         samples_dir = os.path.join(root, "ILSVRC/Data/CLS-LOC", split)
         for entry in os.listdir(samples_dir):
             if split == "train":
@@ -51,13 +50,13 @@ class ImageNetKaggle(Dataset):
                 self.targets.append(target)
 
     def __len__(self):
-            return len(self.samples)
+        return len(self.samples)
 
     def __getitem__(self, idx):
-            x = Image.open(self.samples[idx]).convert("RGB")
-            if self.transform:
-                x = self.transform(x)
-            return x, self.targets[idx]
+        x = Image.open(self.samples[idx]).convert("RGB")
+        if self.transform:
+            x = self.transform(x)
+        return x, self.targets[idx]
 
 
 class ImageNet100Kaggle(Dataset):
@@ -200,7 +199,7 @@ def load_dataset(file_name: str) -> Tuple[np.ndarray, Tensor, np.ndarray, Tensor
     return X_tr, Y_tr, X_te, Y_te
 
 
-def get_ImageNet(path: str, n_class: int) -> Tuple[Tensor, np.ndarray, Tensor, np.ndarray]:
+def get_ImageNet_from_npz_file(path: str, n_class: int) -> Tuple[Tensor, np.ndarray, Tensor, np.ndarray]:
     
     file_name = f"imagenet{n_class}_data.npz"
     file_name = os.path.join(path, file_name)

@@ -36,7 +36,8 @@ def get_IPsi(
         cfg: DictConfig, 
         model: nn.Module, 
         data: Dataset, 
-        path: str
+        path: str,
+        data_std: Optional[float]=None,
     ) -> InvPsi:
     """
     Wrapper to get posterior `Psi`.
@@ -53,14 +54,14 @@ def get_IPsi(
         path: string to point to the file loaded by `loadfile`
     """
     dtype = getattr(torch, cfg.dtype)
-
     if method=="ggnit":
         def compute_psi_ggn_iterator(cfg, model, data):
             dl = DataLoader(
                 dataset=data,
                 batch_size=cfg.projector.v.batch_size,
-                shuffle=False
+                shuffle=False,
                 )
+            data_var = data_std**2 if data_std is not None else None
             def create_V_it():
                 return get_V_iterator(
                     model=model,
@@ -68,6 +69,7 @@ def get_IPsi(
                     is_classification=cfg.data.is_classification,
                     n_batches=cfg.projector.v.n_batches,
                     chunk_size=cfg.projector.chunk_size,
+                    var=data_var,
                 )
             IPsi = HalfInvPsi(
                 V=create_V_it,
@@ -82,15 +84,25 @@ def get_IPsi(
         dl = DataLoader(
             dataset=data,
             batch_size=cfg.projector.v.batch_size,
-            shuffle=False
+            shuffle=False,
             )
-        la = laplace.Laplace(
-                    model=model,
-                    hessian_structure=method,
-                    likelihood=likelihood,
-                    subset_of_weights="all",
-                    prior_precision=cfg.projector.sigma.prior_precision,
-                )
+        if not cfg.data.is_classification:
+            la = laplace.Laplace(
+                        model=model,
+                        hessian_structure=method,
+                        likelihood=likelihood,
+                        subset_of_weights="all",
+                        prior_precision=cfg.projector.sigma.prior_precision,
+                        sigma_noise=data_std,
+                    )
+        else:
+            la = laplace.Laplace(
+                        model=model,
+                        hessian_structure=method,
+                        likelihood=likelihood,
+                        subset_of_weights="all",
+                        prior_precision=cfg.projector.sigma.prior_precision,
+                    )
         la.fit(dl)
         if method=="kron":
             assert type(la) is KronLaplace
@@ -110,7 +122,8 @@ def get_IPsi(
             path, cfg.projector.posterior_hessian.load.type, hessian_name
         )
         with open(hessian_file_name, "rb") as f:
-            H_file = torch.load(f, map_location=cfg.device_torch)
+            H_file = torch.load(f, map_location=cfg.device_torch,
+                                weights_only=False)
         
         if hessian_file_name.startswith("Ihalf"):
             V = H_file["H"].to(dtype)
@@ -118,7 +131,7 @@ def get_IPsi(
                     V=V,
                     prior_precision=cfg.projector.sigma.prior_precision,
                 )
-        else:
+        else:           
             H = H_file["H"].to(dtype)
             assert H.size(0) == H.size(1), "Hessian must be squared matrix."
             inv_Psi = H \
@@ -143,7 +156,8 @@ def get_P(
         data_J: Dataset, 
         path: str,
         s: Optional[int] = None,
-    ) -> InvPsi:
+        data_std: Optional[float] = None,
+    ) -> torch.Tensor:
     """
     Wrapper to get the linear operator `P`.
 
@@ -178,7 +192,7 @@ def get_P(
                 chunk_size=cfg.projector.chunk_size,
             )
         method = method.split("-")[1] # extract name for `get_IPsi`
-        inv_Psi = get_IPsi(method, cfg, model, data_Psi, path)
+        inv_Psi = get_IPsi(method, cfg, model, data_Psi, path, data_std=data_std)
         U = inv_Psi.Sigma_svd(create_proj_jac_it)[0]
         P = compute_optimal_P(IPsi=inv_Psi, J_X=create_proj_jac_it, U=U, s=s)
         return P

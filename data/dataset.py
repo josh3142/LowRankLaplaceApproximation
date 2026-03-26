@@ -3,11 +3,13 @@ import os
 import torch
 from torch import nn, Tensor
 from torchvision.datasets import MNIST, FashionMNIST, CIFAR10
+from torchvision.models.resnet import ResNet18_Weights
 from torchvision.transforms import (Compose, Normalize, ToTensor, Resize,
     RandomHorizontalFlip, RandomGrayscale, RandomApply, RandomResizedCrop)
 from torchvision.transforms import ElasticTransform
 from torch.utils.data import Dataset
 import numpy as np
+from sklearn.model_selection import train_test_split
 
 from typing import Callable, Optional, Tuple, Union, Literal
 
@@ -16,8 +18,7 @@ from data.protein import get_protein, get_protein_trafo
 from data.california import get_california, get_california_trafo
 from data.enb import get_enb, get_enb_trafo
 from data.navalprop import get_navalpro, get_navalpro_trafo
-from data.imagenet import get_ImageNet
-
+from data.imagenet import get_ImageNet_from_npz_file, ImageNetKaggle
 
 def get_dataset(
         name: str, 
@@ -27,7 +28,7 @@ def get_dataset(
     ) -> Dataset:
     
     if name.lower()=="cifar10":
-        def transform() -> Callable:
+        def transform() -> Callable: # type: ignore
             mu  = (0.4914, 0.4822, 0.4465)
             std = (0.2470, 0.2435, 0.2616)
             trafo = [ToTensor(), Normalize(mu, std), SetType(dtype)]
@@ -45,22 +46,11 @@ def get_dataset(
         data = CIFAR10(path, train=train, transform=transform(), 
             download=True)
         
-    elif name.lower()=="cifar10_corrupt":
-        def transform() -> Callable:
-            mu  = (0.4914, 0.4822, 0.4465)
-            std = (0.2470, 0.2435, 0.2616)
-            trafo = [
-                ElasticTransform(alpha=50.),
-                ToTensor(), 
-                Normalize(mu, std),
-                SetType(dtype)
-            ]
-            
-            return Compose(trafo)
-        
-        data = CIFAR10(path, train=train, transform=transform(train), 
-            download=True)
-
+    elif name.startswith("cifar10_c"):
+        if train:
+            data = get_dataset(name="cifar10", path=path, train=True, dtype=dtype)
+        else:
+            data = get_cifar10_corrupted(path, name, train, dtype)
         
     elif name.lower()=="mnist":
         def transform() -> Callable:
@@ -171,11 +161,30 @@ def get_dataset(
 
             return Compose(trafo)
         if train:
-            X, Y, _, _ =  get_ImageNet(path, n_class=10)
+            X, Y, _, _ =  get_ImageNet_from_npz_file(path, n_class=10)
         else:
-            _, _, X, Y =  get_ImageNet(path, n_class=10)
+            _, _, X, Y =  get_ImageNet_from_npz_file(path, n_class=10)
         data = DatasetGenerator(X, Y, transform=transform(), 
                 is_classification=True, dtype=dtype)
+
+    elif name.lower() == "imagenet1000":
+        split = 'train' if train else 'val'
+        def transform() -> Callable:
+            trafo = [
+               ResNet18_Weights.DEFAULT.transforms(),
+               SetType(dtype),
+            ]
+            if train:
+                trafo += [
+                    RandomHorizontalFlip(p=0.5)
+                ]
+
+            return Compose(trafo)
+        data = ImageNetKaggle(
+            root=path,
+            split=split,
+            transform=transform(),
+        )
 
     elif name.lower()=="redwine":
         def transform() -> Callable:
@@ -218,8 +227,11 @@ def get_dataset(
         data = DatasetGenerator(X, Y, transform=transform(), dtype=dtype)
 
     elif name.lower()=="navalpro":
-        def transform() -> Callable:
-            return Compose(get_navalpro_trafo(train) + [SetType(dtype)])
+        def transform() -> Tuple[Callable, Callable]:
+            return (
+                Compose(get_navalpro_trafo(train)[0] + [SetType(dtype)]),
+                Compose(get_navalpro_trafo(train)[1] + [SetType(dtype)])
+            )
 
         if train:
             X, Y, _, _ = get_navalpro(path)
@@ -247,9 +259,12 @@ class DatasetGenerator(Dataset):
             self, 
             X: Union[Tensor, np.ndarray], 
             Y: Union[Tensor, np.ndarray], 
-            transform: Optional[Callable]=None,
+            transform: Optional[
+                Union[Callable, Tuple[Callable, Callable]]
+            ]=None,
             is_classification: bool=False,
-            dtype: Literal["float32", "float64"]="float64"
+            dtype: Literal["float32", "float64"]="float64",
+            change_X_dtype: bool=True,
         ):
         """
         Args:
@@ -260,7 +275,7 @@ class DatasetGenerator(Dataset):
             dtype: Data type of `X`. Data type of `Y` is changed only for 
                 regression tasks (classification task should be of integer type) 
         """
-        self.X = self.change_dtype(X, dtype)
+        self.X = X
         if len(Y.shape) > 1 or is_classification:
             self.Y         = Y
         else:
@@ -268,6 +283,7 @@ class DatasetGenerator(Dataset):
         if not is_classification:
             self.Y = self.change_dtype(self.Y, dtype)
         self.transform = transform
+        self.dtype = dtype
 
     @staticmethod
     def change_dtype(
@@ -287,7 +303,12 @@ class DatasetGenerator(Dataset):
         x, y = self.X[idx], self.Y[idx]
 
         if self.transform is not None:
-            x = self.transform(x)
+            if type(self.transform) is tuple:
+                x = self.transform[0](x)
+                y = self.transform[1](y)
+            else:
+                x = self.transform(x)
+        x = self.change_dtype(x, self.dtype)
         return x, y
 
     def __len__(self) -> int:
@@ -333,4 +354,39 @@ def get_mnist_corrupted(path: str, name: str, train: bool, dtype: str) -> Datase
         transform=transform(),
         dtype=dtype,
         is_classification=True,
+    )
+
+def get_cifar10_corrupted(path: str, name: str, train: bool, dtype: str,
+                          split_seed: int = 0) -> Dataset:
+    assert not train, "CIFAR10 corrupted only available as test data"
+    def transform() -> Callable: # type: ignore
+            mu  = (0.4914, 0.4822, 0.4465)
+            std = (0.2470, 0.2435, 0.2616)
+            trafo = [ToTensor(), Normalize(mu, std), SetType(dtype)]
+            if train:
+                trafo += [
+                    RandomHorizontalFlip(p = 0.5),
+                    RandomGrayscale(p = 0.3),
+                    RandomApply(
+                        nn.ModuleList([
+                            RandomResizedCrop(32, scale=(0.2, 1.0), antialias=True)]), 
+                        p = 0.5)
+                ]
+            return Compose(trafo)
+
+    name, corruption = name.split("-")
+    file_path = os.path.join(path, name)
+    X = np.load(
+        os.path.join(file_path, f"{corruption}.npy")
+    )
+    Y = np.load(
+        os.path.join(file_path, f"labels.npy")
+    ).astype(np.int64)
+    return DatasetGenerator(
+        X,
+        Y,
+        transform=transform(),
+        dtype=dtype,
+        is_classification=True,
+        change_X_dtype=False,
     )

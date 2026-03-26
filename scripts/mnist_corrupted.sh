@@ -28,10 +28,9 @@ swag_n_snapshots=40
 p="lowrank-kron,lowrank-diag,subset-diag,subset-magnitude,subset-swag,lowrankoptimal-loadfile"
 psi_ref=loadfile
 psi_approx=kron
-projector_batch_size=10
-v_batch_size=10
+projector_batch_size=50
+v_batch_size=200
 hessian_name=I60000.pt
-jacobian_seed=0
 
 
 # Note: If the Fisher information matrix for MNIST has been already computed
@@ -73,7 +72,6 @@ do
         data.swag_kwargs.swag_n_snapshots=$swag_n_snapshots \
         data.use_corrupt=$use_corrupt \
         data.name_corrupt=mnist_c-$c \
-        projector.jacobian_seed=$jacobian_seed \
         seed=$seed \
         projector.posterior_hessian.load.name=$hessian_name \
 
@@ -82,6 +80,8 @@ do
         pred_model=$model \
         projector=Sigma\
         projector.s.n=$s_number \
+        projector.s.min=$s_min \
+        projector.s.max=$s_max \
         projector.sigma.method.p=$p \
         projector.sigma.method.psi=$psi_ref \
         projector.batch_size=$projector_batch_size \
@@ -93,7 +93,6 @@ do
         data.name_corrupt=mnist_c-$c \
         projector.posterior_hessian.load.name=$hessian_name \
         seed=$seed \
-        projector.jacobian_seed=$jacobian_seed \
 
     CUDA_VISIBLE_DEVICES=$cuda python compute_metrics.py -m \
         data=$data data.folder_name=$folder_name \
@@ -102,8 +101,6 @@ do
         projector.s.n=$s_number \
         projector.sigma.method.p=$p \
         projector.sigma.method.psi=$psi_ref \
-        projector.batch_size=$projector_batch_size \
-        projector.v.batch_size=$v_batch_size \
         projector.name_postfix="_c-$c" \
         data.swag_kwargs.swag_lr=$swag_lr \
         data.swag_kwargs.swag_n_snapshots=$swag_n_snapshots \
@@ -119,8 +116,6 @@ do
         projector.s.n=$s_number \
         projector.sigma.method.p=null \
         projector.sigma.method.psi=$psi_approx \
-        projector.batch_size=$projector_batch_size \
-        projector.v.batch_size=$v_batch_size \
         projector.posterior_hessian.load.name=$hessian_name \
         projector.name_postfix="_c-$c" \
         data.swag_kwargs.swag_lr=$swag_lr \

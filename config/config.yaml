@@ -11,8 +11,9 @@ dtype: "float64"
 
 plot:
   fontsize: 
-    axes: 18
-    legend: 12
+    axes: 22
+    legend: 18
+  linewidth: 2.5
   show_legend: False
   evaluation:
     # if null (None) all methods from the dataframe are plotted
@@ -20,6 +21,13 @@ plot:
     legend: # display information in legend
       reduction_type: True
       psi: False
+
+results_file:
+  name_postfix: "" # postfix appended to SigmaP- and metrics files
+
+metric:
+  kl: True
+  w2: False
 
 hydra:
   job:

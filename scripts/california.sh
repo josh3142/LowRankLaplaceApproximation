@@ -3,11 +3,11 @@
 # general
 cuda=0
 seed="1,2,3,4,5"
-n_batches=50
 s_max=null
 
 # data
 data=california
+data_folder_name=california
 
 # projector
 projector=I
@@ -22,30 +22,40 @@ p="lowrank-kron,lowrank-diag,subset-diag,subset-magnitude,subset-swag,lowrankopt
 psi_ref=loadfile
 posterior_hessian_file=I16512.pt
 psi_approx=kron
-projector_batch_size=10
-jacobian_seed=0
+projector_batch_size=100
+n_batches=50
 
 # Plotting options
-plot_evaluation_methods="[Psubset-swag_Psiloadfile,Plowrank-diag_Psiloadfile,Psubset-diag_Psiloadfile,Plowrank-kron_Psiloadfile,Psubset-magnitude_Psiloadfile,Plowrankoptimal-ggnit_Psiloadfile]"
+plot_evaluation_methods="[Psubset-swag_Psiloadfile,Plowrank-diag_Psiloadfile,Psubset-diag_Psiloadfile,Plowrank-kron_Psiloadfile,Psubset-magnitude_Psiloadfile,Plowrankoptimal-ggnit_Psiloadfile,PNone_Psiloadfile]"
 
-# compute the Hessian or Fisher information matrix. (required for load file)
+
+# compute the Hessian (required for load file)
 CUDA_VISIBLE_DEVICES=$cuda python get_hessian.py -m \
     seed=$seed \
     data=$data \
+    data.folder_name=$data_folder_name \
     pred_model=$model \
     projector=$projector \
     projector.batch_size=$projector_batch_size projector.n_batches=null\
 
-# obtain and plot the spectrum
-CUDA_VISIBLE_DEVICES=$cuda python plot_spectrum_H.py -m \
-    seed=$seed \
+# compute projectors for all submodels
+CUDA_VISIBLE_DEVICES=$cuda python compute_projector.py -m \
     data=$data \
+    data.folder_name=$data_folder_name \
     pred_model=$model \
-    projector=$projector
+    pred_model.param.n_hidden=$n_hidden pred_model.param.n_layer=$n_layer \
+    projector=Sigma \
+    projector.n_batches=$n_batches \
+    projector.s.max=$s_max \
+    projector.sigma.method.p=$p \
+    projector.batch_size=$projector_batch_size \
+    projector.sigma.method.psi=$psi_ref \
+    seed=$seed
 
-# compute epistemic covariance and nll for the full Laplace approximation
+# compute epistemic covariance for full model
 CUDA_VISIBLE_DEVICES=$cuda python get_epistemic_covariance.py -m \
     data=$data \
+    data.folder_name=$data_folder_name \
     pred_model=$model \
     pred_model.param.n_hidden=$n_hidden pred_model.param.n_layer=$n_layer \
     projector=Sigma\
@@ -53,13 +63,14 @@ CUDA_VISIBLE_DEVICES=$cuda python get_epistemic_covariance.py -m \
     projector.n_batches=$n_batches \
     projector.s.max=$s_max \
     projector.sigma.method.p=null \
+    projector.batch_size=$projector_batch_size \
     projector.sigma.method.psi="$psi_ref,$psi_approx" \
-    projector.jacobian_seed=$jacobian_seed \
     seed=$seed
 
-# compute epistemic covariance and nll for all projectors p
+# compute epistemic covariance for all submodels
 CUDA_VISIBLE_DEVICES=$cuda python get_epistemic_covariance.py -m \
     data=$data \
+    data.folder_name=$data_folder_name \
     pred_model=$model \
     pred_model.param.n_hidden=$n_hidden pred_model.param.n_layer=$n_layer \
     projector=Sigma\
@@ -67,51 +78,70 @@ CUDA_VISIBLE_DEVICES=$cuda python get_epistemic_covariance.py -m \
     projector.n_batches=$n_batches \
     projector.s.max=$s_max \
     projector.sigma.method.p=$p \
+    projector.batch_size=$projector_batch_size \
     projector.sigma.method.psi=$psi_ref \
-    projector.jacobian_seed=$jacobian_seed \
     seed=$seed
 
-# compute metric for all projector p
-CUDA_VISIBLE_DEVICES=$cuda python compute_metrics.py -m \
+# compute covariance based metrics for full model
+CUDA_VISIBLE_DEVICES=$cuda python compute_covariance_metrics.py -m \
     data=$data \
+    data.folder_name=$data_folder_name \
     pred_model=$model \
     pred_model.param.n_hidden=$n_hidden pred_model.param.n_layer=$n_layer \
     projector=Sigma\
     projector.posterior_hessian.load.name=$posterior_hessian_file \
-    projector.n_batches=$n_batches \
-    projector.s.max=$s_max \
-    projector.sigma.method.p=$p \
-    projector.sigma.method.psi=$psi_ref \
-    seed=$seed
-
-# compute metric for the full Laplace approximation
-CUDA_VISIBLE_DEVICES=$cuda python compute_metrics.py -m \
-    data=$data \
-    pred_model=$model \
-    pred_model.param.n_hidden=$n_hidden pred_model.param.n_layer=$n_layer \
-    projector=Sigma\
-    projector.posterior_hessian.load.name=$posterior_hessian_file \
-    projector.n_batches=$n_batches \
-    projector.s.max=$s_max \
     projector.sigma.method.p=null \
     projector.sigma.method.psi="$psi_ref,$psi_approx" \
     seed=$seed
 
-# transform the python dictionaries into a dataframe
+# compute covariance based metrics for all submodels
+CUDA_VISIBLE_DEVICES=$cuda python compute_covariance_metrics.py -m \
+    data=$data \
+    data.folder_name=$data_folder_name \
+    pred_model=$model \
+    pred_model.param.n_hidden=$n_hidden pred_model.param.n_layer=$n_layer \
+    projector=Sigma \
+    projector.posterior_hessian.load.name=$posterior_hessian_file \
+    projector.sigma.method.p=$p \
+    projector.sigma.method.psi=$psi_ref \
+    seed=$seed
+
+# compute predictive distribution based metrics for full model
+CUDA_VISIBLE_DEVICES=$cuda python compute_predictive_metrics.py -m \
+    data=$data \
+    data.folder_name=$data_folder_name \
+    pred_model=$model \
+    pred_model.param.n_hidden=$n_hidden pred_model.param.n_layer=$n_layer \
+    projector=Sigma\
+    projector.posterior_hessian.load.name=$posterior_hessian_file \
+    projector.sigma.method.p=null \
+    projector.sigma.method.psi="$psi_ref,$psi_approx" \
+    seed=$seed
+
+# compute predictive distribution based metrics for all submodels
+CUDA_VISIBLE_DEVICES=$cuda python compute_predictive_metrics.py -m \
+    data=$data \
+    data.folder_name=$data_folder_name \
+    pred_model=$model \
+    pred_model.param.n_hidden=$n_hidden pred_model.param.n_layer=$n_layer \
+    projector=Sigma \
+    projector.posterior_hessian.load.name=$posterior_hessian_file \
+    projector.sigma.method.p=$p \
+    projector.sigma.method.psi=$psi_ref \
+    seed=$seed
+
+
+# transform dictionaries into a dataframes
 python make_dict_to_df.py -m \
     data=$data \
+    data.folder_name=$data_folder_name \
     pred_model=$model \
     pred_model.param.n_hidden=$n_hidden pred_model.param.n_layer=$n_layer \
 
 # create the plots based on the dataframes
 python plot_evaluation.py -m \
     data=$data \
-    pred_model=$model \
+    data.folder_name=$data_folder_name \
     plot.evaluation.methods=$plot_evaluation_methods \
+    pred_model=$model \
     pred_model.param.n_hidden=$n_hidden pred_model.param.n_layer=$n_layer \
-
-
-
-
-
-

@@ -17,3 +17,4 @@ swag_kwargs:
   swag_n_snapshots: 100
   swag_snapshot_freq: 1
   swag_lr: 0.01
+prior_precision: 2.003

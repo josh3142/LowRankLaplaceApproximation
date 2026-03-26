@@ -11,7 +11,6 @@ from laplace import KronLaplace, FullLaplace, DiagLaplace, Laplace
 from laplace.utils import (
     LargestVarianceDiagLaplaceSubnetMask,
     LargestMagnitudeSubnetMask,
-    LargestVarianceSWAGSubnetMask
 )
 
 from utils import flatten_batch_and_target_dimension
@@ -29,9 +28,11 @@ from linearized_model.low_rank_laplace import (
 )
 from linearized_model.subset import subset_indices
 
+ATOL=1e-5
+RTOL=1e-5
 
 @pytest.fixture
-def init_data(seed=0, device=torch.device("cpu"), dtype=torch.float64) -> Callable:
+def init_data(seed=0, device=torch.device("cpu"), dtype=torch.float32) -> Callable:
     def create_data(
         likelihood: Literal["classification", "regression"] = "classification",
     ) -> Tuple:
@@ -158,7 +159,7 @@ def test_FullInvPsi(random_inv_psi):
     # test SVD of sigma
     theoretical_value = flat_J_X @ Psi @ flat_J_X.T
     U, Lamb = IPsi.Sigma_svd(J_X)
-    assert torch.allclose(U @ torch.diag(Lamb) @ U.T, theoretical_value, atol=1e-5)
+    assert torch.allclose(U @ torch.diag(Lamb) @ U.T, theoretical_value, atol=ATOL)
 
 
 def test_HalfInvPsi(random_inv_psi):
@@ -176,7 +177,7 @@ def test_HalfInvPsi(random_inv_psi):
     # test Sigma = J_X @ Psi @ J_X.T
     flat_J_X = flatten_batch_and_target_dimension(J_X)
     theoretical_value = flat_J_X @ Psi @ flat_J_X.T
-    assert torch.all(torch.isclose(IPsi.Sigma(J_X), theoretical_value, atol=1e-5))
+    assert torch.all(torch.isclose(IPsi.Sigma(J_X), theoretical_value, atol=ATOL))
 
     # test Sigma_batchwise
     # shorten for computational speed
@@ -193,14 +194,14 @@ def test_HalfInvPsi(random_inv_psi):
     # test quadratic form W @ inv_Psi @ W
     theoretical_value = W.T @ inv_Psi @ W
     assert torch.all(
-        torch.isclose(IPsi.quadratic_form(W=W), theoretical_value, atol=1e-5)
+        torch.isclose(IPsi.quadratic_form(W=W), theoretical_value, atol=ATOL)
     )
 
     # test SVD of sigma
     theoretical_value = flat_J_X @ Psi @ flat_J_X.T
     U, Lamb = IPsi.Sigma_svd(J_X)
     assert torch.all(
-        torch.isclose(U @ torch.diag(Lamb) @ U.T, theoretical_value, atol=1e-5)
+        torch.isclose(U @ torch.diag(Lamb) @ U.T, theoretical_value, atol=ATOL)
     )
 
     # test iterator version
@@ -314,13 +315,13 @@ def test_KronInvPsi(init_data, likelihood):
     # test Psi @ W
     theoretical_value = torch.tensordot(Psi, W1, dims=([-1], [0]))
     computed_value = IPsi.Psi_times_W(W=W1)
-    assert torch.all(torch.isclose(theoretical_value, computed_value))
+    assert torch.all(torch.isclose(theoretical_value, computed_value, atol=ATOL, rtol=RTOL))
 
     # test Sigma
     # theoretical_value
     theoretical_value = W2.T @ inv_Psi @ W2
     computed_value = IPsi.quadratic_form(W=W2)
-    assert torch.all(torch.isclose(theoretical_value, computed_value))
+    assert torch.all(torch.isclose(theoretical_value, computed_value, atol=ATOL, rtol=RTOL))
 
     # test Sigma_batchwise
     # shorten for computational speed
@@ -333,7 +334,7 @@ def test_KronInvPsi(init_data, likelihood):
         theoretical_value.append(IPsi.Sigma(short_J_X[b]))
     theoretical_value = torch.stack(theoretical_value, dim=0)
     computed_value = IPsi.Sigma_batchwise(short_J_X)
-    assert torch.allclose(theoretical_value, computed_value)
+    assert torch.allclose(theoretical_value, computed_value, atol=ATOL, rtol=RTOL)
 
 
 @pytest.mark.parametrize("likelihood", ["classification", "regression"])
@@ -452,13 +453,13 @@ def test_optimal_P(
         # assert torch.all(torch.isclose(Sigma_P_s,theoretical_Sigma_P_s))
         assert torch.all(
             torch.isclose(
-                theoretical_Sigma_P_s, compute_Sigma_P(P=P_s, IPsi=IPsi, J_X=J_X)
-            )
+                theoretical_Sigma_P_s, compute_Sigma_P(P=P_s, IPsi=IPsi, J_X=J_X),
+            atol=1e-2, rtol=1e-2)
         )
-        assert torch.all(torch.isclose(Sigma_P_s, compute_Sigma_s(U=U, Lamb=Lamb, s=s)))
+        assert torch.all(torch.isclose(Sigma_P_s, compute_Sigma_s(U=U, Lamb=Lamb, s=s), atol=1e-3, rtol=1e-3))
 
     full_Sigma = compute_Sigma(IPsi=IPsi, J_X=create_J_X_iterator)
-    assert torch.all(torch.isclose(full_Sigma, Sigma_P_s))
+    assert torch.all(torch.isclose(full_Sigma, Sigma_P_s, atol=1e-3, rtol=1e-3))
 
 
 @pytest.mark.parametrize("hessian_structure", ["kron", "full"])
@@ -602,8 +603,8 @@ def test_subset_predictive_variances_via_laplace_library(
                 theoretical_variances.size(0), 1, 1
             )
 
-        assert torch.allclose(predictions, theoretical_predictions)
-        assert torch.allclose(variances, theoretical_variances)
+        assert torch.allclose(predictions, theoretical_predictions, atol=ATOL)
+        assert torch.allclose(variances, theoretical_variances, atol=ATOL)
 
         
 

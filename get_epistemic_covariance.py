@@ -1,6 +1,5 @@
 """Compute the predictive covariance of different methods,
-use them to infer a projection operator and compare the results
-with `update_performance_metrics`.
+use them to infer a projection operator and compute the epistemic covariances.
 """
 
 import os
@@ -23,17 +22,13 @@ from projector.projector1d import (
     create_jacobian_data_iterator,
     number_of_parameters_with_grad,
 )
+
 from data.dataset import get_dataset
 from pred_model.model import get_model
 from projector.projector import get_P, get_IPsi 
 from linearized_model.low_rank_laplace import (
     compute_Sigma,
     compute_Sigma_P,
-    IPsi_predictive,
-)
-from linearized_model.approximation_metrics import (
-    collect_NLL, 
-    update_performance_metrics
 )
 
 from utils import make_deterministic
@@ -92,27 +87,32 @@ def run_main(cfg: DictConfig) -> None:
     torch.set_default_dtype(getattr(torch, cfg.dtype))
 
     # store all results in this dictionary
-    results, nll = {"cfg": cfg}, {}
+    results = {"cfg": cfg}
 
     # setting up paths
     print(f"Considering {cfg.data.name}")
+
     results_path = os.path.join(
         "results", cfg.data.folder_name, cfg.pred_model.name, f"seed{cfg.seed}"
     )
+    ## for the projector
     projector_path = os.path.join(results_path, "projector")
-    name = f"{cfg.projector.sigma.method.p}" + \
-        f"_Psi{cfg.projector.sigma.method.psi}{cfg.projector.name_postfix}"
-    results_name = f"SigmaP_{name}.pt"
-    nll_name = f"nll_{name}.pt"
-    results_filename = os.path.join(results_path, results_name)
-    nll_filename = os.path.join(results_path, nll_name)
+    projector_filename = f"projector_{cfg.projector.sigma.method.p}" + \
+        f"_Psi{cfg.projector.sigma.method.psi}.npz"
+    projector_file = os.path.join(projector_path, projector_filename)
+
+    ## for the results
+    results_filename = f"SigmaP_{cfg.projector.sigma.method.p}" + \
+        f"_Psi{cfg.projector.sigma.method.psi}{cfg.results_file.name_postfix}.pt"
+    results_file = os.path.join(results_path, results_filename)
     Path(os.path.join(results_path, "ckpt")).mkdir(parents=True, exist_ok=True)
 
+    
+    # setting up kwargs for loading of model and data
     get_model_kwargs = dict(cfg.pred_model.param) | dict(cfg.data.param)
     get_model_kwargs["name"] = cfg.pred_model.name
     results["get_model_kwargs"] = get_model_kwargs
 
-    # setting up kwargs for loading of model and data
     data_name = cfg.data.name_corrupt if cfg.data.use_corrupt else cfg.data.name
     get_dataset_kwargs = dict(
         name=data_name, path=cfg.data.path, dtype=cfg.dtype
@@ -126,11 +126,6 @@ def run_main(cfg: DictConfig) -> None:
     dl_train = DataLoader(
         dataset=train_data,
         batch_size=cfg.projector.fit.batch_size,
-        shuffle=False
-    )
-    dl_test = DataLoader(
-        dataset=test_data,
-        batch_size=cfg.projector.batch_size,
         shuffle=False
     )
 
@@ -148,7 +143,8 @@ def run_main(cfg: DictConfig) -> None:
     ckpt_file_name = os.path.join(results_path, "ckpt", cfg.data.model.ckpt)
     results["ckpt_file_name"] = ckpt_file_name
     with open(ckpt_file_name, "rb") as f:
-        state_dict = torch.load(f, map_location=cfg.device_torch)
+        state_dict = torch.load(f, map_location=cfg.device_torch, 
+                                weights_only=True)
     model.load_state_dict(state_dict=state_dict)
 
     #  The following objects create upon call an iterator over the jacobian
@@ -191,12 +187,15 @@ def run_main(cfg: DictConfig) -> None:
         raise ValueError("Insert a None or a positive number for `data_std`.")
     results['regression_likelihood_sigma'] = regression_likelihood_sigma
 
+    print(f'Using prior precision {cfg.projector.sigma.prior_precision}')
+
     IPsi = get_IPsi(
         method=cfg.projector.sigma.method.psi,
         cfg=cfg,
         model=model,
         data=train_data,
-        path=projector_path
+        path=projector_path,
+        data_std=regression_likelihood_sigma,
     )
 
     if cfg.projector.sigma.method.p is None:
@@ -206,16 +205,26 @@ def run_main(cfg: DictConfig) -> None:
         s_list = [None]
         print("No projector is chosen.")
     else:
-        P = get_P(
-            cfg.projector.sigma.method.p, 
-            cfg, 
-            model, 
-            data_Psi=train_data, 
-            data_J=train_data if not "lowrankoptimal" in cfg.projector.sigma.method.p \
-                else test_data, # theoretical optimal solution needs test_data 
-            path=projector_path,
-            s=s_max_regularized,
-        )
+        try: 
+            P = torch.load(
+                projector_file,
+                map_location=cfg.device_torch,
+                weights_only=False,
+            )["P"]
+            print(f'Using P from {projector_file}')
+        except FileNotFoundError:
+            print('No stored P, computing P...')
+            P = get_P(
+                cfg.projector.sigma.method.p, 
+                cfg, 
+                model, 
+                data_Psi=train_data, 
+                data_J=train_data if "lowrankoptimal" not in cfg.projector.sigma.method.p \
+                    else test_data, # theoretical optimal solution needs test_data 
+                path=projector_path,
+                s=s_max_regularized,
+                data_std=regression_likelihood_sigma,
+            )
         create_Sigma_P_s_it = compute_Sigma_P(
             P=P,
             IPsi=IPsi,
@@ -226,38 +235,17 @@ def run_main(cfg: DictConfig) -> None:
     if cfg.projector.store:
         results["P"] = P
 
-    # compute predictive to compute nll
-    predictive = IPsi_predictive(
-        model=model,
-        IPsi=IPsi,
-        P=P,
-        chunk_size=cfg.projector.chunk_size,
-        regression_likelihood_sigma=regression_likelihood_sigma,
-    )
-    results["s_list"], nll["s_list"], nll["nll"] = s_list, s_list, []
+    results["s_list"] = s_list
+    
+    # store Sigma_P_s for each s
     for s, Sigma_P_s in zip(s_list, create_Sigma_P_s_it):
-        # store Sigma_P
         name_Sigma = f"SigmaP{s}" if s is not None else "SigmaP"
         results[name_Sigma] = Sigma_P_s
 
-        # compute nll
-        predictive_s = lambda X: predictive(X=X, s=s)
-        nll_value = collect_NLL(
-            predictive=predictive_s,
-            dataloader=dl_test,
-            is_classification=cfg.data.is_classification,
-            reduction="mean",
-            verbose=False,
-            device=cfg.device_torch
-        ).item()
-        update_performance_metrics(nll, "nll", nll_value)
-
     # save results after each seed computation
-    print(f"Seed {cfg.seed}! Save results in {results_filename}")
-    with open(results_filename, "wb") as f:
+    print(f"Seed {cfg.seed}! Save results in {results_file}")
+    with open(results_file, "wb") as f:
         torch.save(results, f)
-    with open(nll_filename, "wb") as f:
-        torch.save(nll, f)
 
 
 if __name__ == "__main__":

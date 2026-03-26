@@ -52,21 +52,26 @@ def normalize(x: Tensor, mu: List, std: List) -> Tensor:
     return (x - mu) / std
 
 
-def get_navalpro_trafo(train: bool=True) -> List:
+def get_navalpro_trafo(train: bool=True) -> Tuple[List, List]:
     """
     Data transformation for protein data.
     These values are taken from the X1 with 
     X1, _, _, _ = shuffle_and_split_data(X, Y, 0.8, 42)
     """
-    mu  = [5.1554, 14.9654, 27183.146, 2133.397, 8194.811, 226.8203,
+    X_mu = [5.1554, 14.9654, 27183.146, 2133.397, 8194.811, 226.8203,
         226.8203, 734.8378, 645.923, 2.3496, 12.2792, 1.0294, 33.5883, 0.6613]
-    std =[2.6314, 7.7609, 22217.77, 775.8903, 1093.4258, 201.0936, 201.0936,
+    X_std = [2.6314, 7.7609, 22217.77, 775.8903, 1093.4258, 201.0936, 201.0936,
         174.2754, 72.8701, 1.0879, 5.3529, 0.0104, 25.9269, 0.5089]
-    trafo = [
+    X_trafo = [
         lambda x: torch.FloatTensor(x),
-        partial(normalize, mu=mu, std=std)
+        partial(normalize, mu=X_mu, std=X_std),
     ]
-    return trafo
+    Y_mu = [0.9750, 0.9875]
+    Y_std = [0.0147, 0.0075]
+    Y_trafo = [
+        partial(normalize, mu=Y_mu, std=Y_std),
+    ]
+    return X_trafo, Y_trafo
 
 
 if __name__=="__main__":

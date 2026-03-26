@@ -1,14 +1,16 @@
 name: Sigma
 store: False # should the operator to reduce the dimension be stored?
 # batches and chunk_size determine the storage cost to compute the projector P
+# The Jacobian is computed for `batch_size * n_batches` samples
 batch_size: 100 # batch size to compute projector
 n_batches: 10 # number of iterations to compute the Jacobian.
-jacobian_seed: 0 # seed of selecting samples to construct the Jacobian 
+# seed of selecting samples to construct the Jacobian 
+jacobian_seed: ${seed} # jacobian seed is the same as seed 
 # The Jacobian is computed for `batch_size * n_batches` samples
 chunk_size: null # number of vjp to compute the Jacobian for computing P
 # If None, the maximum chunk size is used. 
 # If 1, then compute the jacobian row-by-row with a for-loop
-name_postfix: "" # String to be appended on file name
+name_postfix: "" # String to be appended on projector filename
 data_std: null # if null the standard deviation for regression is estimated 
 # from the data. If a float is provided, it is used for standard deviation of the
 # data. 
@@ -51,7 +53,7 @@ sigma:
         #                  subset-magnitude, subset-swag, subset-diag 
         p: lowrank-kron 
         psi: ggnit # possible values: ggnit, kron, full, loadfile
-    prior_precision: 1.0
+    prior_precision: ${data.prior_precision}
 
 # if the posterior is loaded
 posterior_hessian: 

@@ -85,6 +85,18 @@ def get_ylabel(name: str) -> str:
         return "Trace"
     elif name=="logtrace":
         return "Log-Trace"
+    elif name=="w2":
+        return "W2"
+    elif name=="kl":
+        return "KL"
+    elif name=="brier":
+        return "Brier-Score"
+    elif name=="ece":
+        return "ECE"
+    elif name=="coverage":
+        return "Coverage (95%)"
+    elif name=="calibration":
+        return "Calibration Error"
     else:
         raise NotImplementedError
     
@@ -97,6 +109,18 @@ def get_plot_settings(name: str) -> str:
         loc, ylim = "lower right", (-2, None)
     elif name=="logtrace":
         loc, ylim = "lower right", (-1, None)
+    elif name=="kl":
+        loc, ylim = "upper right", (0, None)
+    elif name=="w2":
+        loc, ylim = "upper right", (-1, None)
+    elif name=="brier":
+        loc, ylim = "upper right", (0, None)
+    elif name=="ece":
+        loc, ylim = "upper right", (0, None)
+    elif name=="coverage":
+        loc, ylim = "lower right", (0.9, 1.0) 
+    elif name=="calibration":
+        loc, ylim = "upper right", (0, None)
     else:
         raise NotImplementedError
     return loc, ylim
@@ -106,7 +130,8 @@ def get_plt(
         df: pd.DataFrame, 
         methods: Optional[List[str]]=None,
         is_label_method: bool=True, 
-        is_label_psi: bool=False
+        is_label_psi: bool=False,
+        linewidth: float=2.5,
     ) -> None:
     n_seed = len(df.seed.unique())
     df_mean = df.groupby(["dim"], as_index = False).mean()
@@ -133,7 +158,8 @@ def get_plt(
                  color=get_color(p_name) if psi_name_plot in ["GGN", "loaded"] else get_color2(p_name), 
                  label=label, 
                  alpha= 1.,
-                 linestyle=get_linestyle(p_group))
+                 linestyle=get_linestyle(p_group),
+                 linewidth=linewidth)
         plt.fill_between(df_mean["dim"], 
                         df_mean[f"{method}"] - df_std[f"{method}"],
                         df_mean[f"{method}"] + df_std[f"{method}"],
@@ -150,24 +176,30 @@ def save_fig_acc(
         ylim: Tuple, 
         loc: str, 
         cfg: DictConfig,
-        methods=Optional[List[str]]
+        methods: Optional[List[str]]=None,
+        suppress_legend: bool= False,
     ) -> None:
     
     color="black"
 
     plt.clf()
-    plt.tight_layout()
-    get_plt(df, methods, is_label_method, is_label_psi)
-      
+    fig, axes = plt.subplots(layout='constrained')
+    get_plt(df, methods, is_label_method, is_label_psi, linewidth=cfg.plot.linewidth)
     plt.xlabel(r"$s$", color=color)
     plt.ylabel(f"{y_label}", color=color)
     plt.yticks(color=color)
     plt.xticks(color=color)
     plt.gca().spines[["top", "bottom", "right", "left"]].set_color(color)
-    if cfg.plot.show_legend:
-        plt.legend(loc=loc, fontsize=cfg.plot.fontsize.legend)
+    if cfg.plot.show_legend and not suppress_legend:
+        # Sort legend entries alphabetically
+        handles, labels = plt.gca().get_legend_handles_labels()
+        sorted_handles_labels = sorted(zip(labels, handles))
+        labels, handles = zip(*sorted_handles_labels)
+        # plot legend
+        plt.legend(handles, labels, loc=loc, fontsize=cfg.plot.fontsize.legend)
     plt.ylim(ylim)
-    plt.savefig(img_name, bbox_inches='tight')
+    # plt.tight_layout()
+    plt.savefig(img_name+'.pdf', bbox_inches=None)
     # plt.savefig(img_name, transparent = True, bbox_inches = "tight") # for presentation 
 
 
@@ -183,7 +215,13 @@ def run_main(cfg: DictConfig) -> None:
         name = name.split(".")[0]
         name = name.split("_")[-1]
         df = pd.read_csv(file_name, index_col=False)
-    
+
+        # if name != 'kl':
+        #     suppress_legend = True
+        # else:
+        #     suppress_legend = False
+        suppress_legend = False
+
         # Create plot
         img_name = os.path.join(path, name)
         save_fig_acc(
@@ -195,7 +233,8 @@ def run_main(cfg: DictConfig) -> None:
             loc=get_plot_settings(name)[0],
             ylim=get_plot_settings(name)[1],
             methods=cfg.plot.evaluation.methods,
-            cfg=cfg
+            cfg=cfg,
+            suppress_legend=suppress_legend,
         )
 
 

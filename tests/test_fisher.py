@@ -220,7 +220,6 @@ def test_I_sum_categorical(init_data):
     model, X, Y, _ = init_data
     dl = DataLoader(TensorDataset(X, Y), batch_size=7, shuffle=True)
     param_vec = param_to_vec(model.parameters())
-    var = 3.21
 
     # true I
     jac_sqrt = jacrev(partial(
@@ -230,9 +229,9 @@ def test_I_sum_categorical(init_data):
         X=X, 
         fun=lambda x: 2 * torch.sqrt(x))
     )(param_vec)
-    I_true = get_I_outer_product(jac_sqrt) / var
+    I_true = get_I_outer_product(jac_sqrt)
 
-    I = get_I_sum(model, dl, is_classification=True, var=var)
+    I = get_I_sum(model, dl, is_classification=True, var=1.0) # categorical has no variance
 
     assert torch.allclose(I, I_true)
 

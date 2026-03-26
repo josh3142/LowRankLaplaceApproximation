@@ -89,6 +89,7 @@ def get_Vs(
     # define function to obtain the correct gradiends
     if is_classification:
         fun = lambda x: 2 * torch.sqrt(x)
+        var = 1.0 # classification has no variance
     else:
         fun = lambda x: x
 
@@ -160,10 +161,10 @@ def get_V_iterator(
     # define function to obtain the correct gradiends
     if is_classification:
         fun = lambda x: 2 * torch.sqrt(x)
+        var = 1.0 # classification has no variance
     else:
         fun = lambda x: x
 
-    Vs = []
     dl_iter = iter(dl)
     for _ in range(n_batches):
         try:
@@ -180,4 +181,4 @@ def get_V_iterator(
             ).detach()
         # Since the Fisher Information is an outer product of V. Only the squareroot
         # of the variance `var` is taken.
-        yield V/np.sqrt(var)
+        yield V / np.sqrt(var)

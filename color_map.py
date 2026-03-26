@@ -21,16 +21,16 @@ colors1 = {
     'loadfile': 'black',
 }
 
-colors2 = {
-    'kron': cm(4),
-    'magnitude': cm(5),
-    'swag': cm(6),
-    'diag': plt.cm.Set1(8),
-    'None': 'grey',
-    'ggnit': 'grey',
-    'loadfile': 'grey',
-}
-
+# colors2 = {
+#     'kron': cm(4),
+#     'magnitude': cm(5),
+#     'swag': cm(6),
+#     'diag': plt.cm.Set1(8),
+#     'None': 'grey',
+#     'ggnit': 'grey',
+#     'loadfile': 'grey',
+# }
+colors2 = colors1
 
 def get_color(method: str) -> Color:
     if not method in colors1.keys():

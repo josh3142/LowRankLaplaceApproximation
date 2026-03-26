@@ -18,15 +18,85 @@ pip install laplace-torch==0.2.1
 
 A short introduction and an illustrative example of the paper and the repository is presented in `ShowCaseLaplaceRed.ipynb`. This `jupyter` notebook walks through the main steps of the computation for a simple one-dimensional toy example.
 
-## Running the script
+## Running the scripts
 
-Some experiments are precoded in the `bash` scripts that are contained in the folder `scripts`. However, note that they require the weights of the neural networks to run, but these are not provided in this repository. To use these scripts own nets have to be trained and the trained weights have to be put in the corresponding folders `ckpt`. (But for the toy example in `ShowCaseLaplaceRed.ipynb` everything is provided.)
+Some experiments are precoded in the `bash` scripts contained in the folder `scripts`. However, note that they require the weights of the neural networks to run, but these are not provided in this repository. To use these scripts, own nets have to be trained and the trained weights have to be put in the corresponding folders `ckpt`. (But for the toy example in `ShowCaseLaplaceRed.ipynb` everything is provided.)
 
-Nevertheless, these scripts illustrate how to get the scripts running with user defined adjustments. Each script runs one experiment for different seeds. Other options can be easily selected. To manage different configurations [hydra](https://hydra.cc/docs/intro/) is used. 
+Nevertheless, these scripts illustrate how to get the pipeline running with user-defined adjustments. Each script runs one experiment for different seeds. Other options can be easily selected. To manage different configurations [hydra](https://hydra.cc/docs/intro/) is used.
+
+The full pipeline consists of the following steps:
+
+1. **Compute the Hessian** (or Fisher information matrix):
+   ```
+   python get_hessian.py
+   ```
+
+2. **Optimize the prior precision**:
+   ```
+   python optimize_prior_precision.py
+   ```
+
+3. **Compute the projector** (low-rank subspace):
+   ```
+   python compute_projector.py
+   ```
+
+4. **Compute the epistemic covariance**:
+   ```
+   python get_epistemic_covariance.py
+   ```
+
+5. **Evaluate covariance and predictive metrics**:
+   ```
+   python compute_covariance_metrics.py
+   python compute_predictive_metrics.py
+   python compute_uq_metrics_at_map.py
+   ```
+
+6. **Compute additional diagnostics** (optional):
+   ```
+   python compute_dead_neurons.py
+   python compute_jacobian_rank.py
+   python compute_rank_correlation.py
+   python compute_kl_categorical.py
+   ```
+
+7. **Collect results into dataframes and plot**:
+   ```
+   python make_dict_to_df.py
+   python obtain_data_metrics.py
+   python get_df_kl.py
+   python plot_evaluation.py
+   python plot_spectrum_H.py
+   python plot_jacobian.py
+   python plot_corrupted_mnist.py
+   ```
+
+The bash scripts in `scripts/` combine these steps for specific datasets and run them over multiple seeds. For example,
+
 ```
 bash scripts/redwine.sh
 ```
-computes the covariance matrix of the predictive distribution for different dimensions $s$ and computes the relative error, logarithm of the trace, trace and negative log-likelihood for various subspace models. All these results are stored in a dataframe and plotted.
+
+computes the covariance matrix of the predictive distribution for different dimensions $s$ and evaluates the relative error, logarithm of the trace, trace, and negative log-likelihood for various subspace models. All results are stored in a dataframe and plotted.
+
+For a one-dimensional illustration of the projector, see `1d_projector.py`.
+
+### Repository structure
+
+```
+.
+├── config/              # Hydra configuration files
+├── data/                # Dataset loading utilities
+├── linearized_model/    # Linearized model implementation
+├── pred_model/          # Predictive model definitions
+├── projector/           # Projector and Hessian computation
+├── scripts/             # Bash scripts for running experiments
+├── tests/               # Unit tests
+├── utils/               # Environment files and requirements
+└── ShowCaseLaplaceRed.ipynb  # Introductory notebook
+```
+
 
 
 ## Disclaimer

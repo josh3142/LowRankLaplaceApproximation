@@ -1,5 +1,5 @@
 # Optimal Subspace Inference for the Laplace Approximation of Bayesian Neural Networks
-Subspace inference for neural networks assumes that a subspace of their parameter space suffices to produce a reliable uncertainty quantification. In this repository, various subspace models are implemented to evaluate their approximation quality. For more information see the preprint [Optimal Subspace Inference for the Laplace Approximation of Bayesian Neural Networks](https://doi.org/10.48550/arXiv.2502.02345).
+Subspace inference for neural networks assumes that a subspace of their parameter space suffices to produce a reliable uncertainty quantification. In this repository, various subspace models are implemented to evaluate their approximation quality. For more information see the preprint [Low Rank Based Subspace Inference for the Laplace Approximation of Bayesian Neural Networks](https://doi.org/10.48550/arXiv.2502.02345).
 
 ## Requirements
 
@@ -127,4 +127,4 @@ SOFTWARE.
 ## Reference
 If you find this repository useful, please cite our preprint:
 
-[1] **Optimal Subspace Inference for the Laplace Approximation of Bayesian Neural Networks**. Josua Faller and Jörg Martin. *arXiv Preprint* [arXiv:2502.02345](https://doi.org/10.48550/arXiv.2502.02345).
+[1] **Low Rank Based Subspace Inference for the Laplace Approximation of Bayesian Neural Networks**. Josua Faller and Jörg Martin. *arXiv Preprint* [arXiv:2502.02345](https://doi.org/10.48550/arXiv.2502.02345).
